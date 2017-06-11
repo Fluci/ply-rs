@@ -5,7 +5,7 @@ authors = ["Felice Serena <felice@serena-mueller.ch>"]
 build = "build.rs"
 
 [dependencies]
+linked-hash-map = "0.4.2"
 
 [build-dependencies]
 peg = "0.5.3"
-linked-hash-map = "0.4.2"

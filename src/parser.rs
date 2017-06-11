@@ -5,12 +5,12 @@ use ply::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Line {
-	MagicNumber,
-	Format(Format),
-	Comment(Comment),
-	Element(Element),
-	Property(Property),
-	EndHeader
+    MagicNumber,
+    Format(Format),
+    Comment(Comment),
+    Element(Element),
+    Property(Property),
+    EndHeader
 }
 
 macro_rules! read_line {
@@ -42,7 +42,7 @@ impl Parser {
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
         let mut header_format : Option<Format> = None;
-        let mut header_elements = Vec::<Element>::new();
+        let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
         let mut line_index = 1;
         'readlines: loop {
@@ -69,7 +69,7 @@ impl Parser {
                     header_comments.push(c.clone())
                 ),
                 Ok(Line::Element(ref e)) => {
-                    header_elements.push(e.clone())
+                    header_elements.add(e.clone())
                 },
                 Ok(Line::Property(p)) => (
                     if header_elements.is_empty() {
@@ -78,7 +78,9 @@ impl Parser {
                             format!("Property {:?} found without preceding element.", p)
                         ));
                     } else {
-                        header_elements.last_mut().unwrap().properties.push(p);
+                        let (_, mut e) = header_elements.pop_back().unwrap();
+                        e.properties.add(p);
+                        header_elements.add(e);
                     }
                 ),
                 Ok(Line::EndHeader) => { break 'readlines; },
