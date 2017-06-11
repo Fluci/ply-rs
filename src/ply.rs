@@ -1,6 +1,16 @@
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Line {
+	MagicNumber,
+	Format(Format),
+	Comment(Comment),
+	Element(Element),
+	Property(Property),
+	EndHeader
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Version {
 	pub major: u16,
 	pub minor: u8,

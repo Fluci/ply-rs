@@ -27,15 +27,15 @@ data_type -> DataType
 		DataType::List(Box::new(t))
 	}
 
-pub magic_number -> ()
+pub magic_number
 	= "ply"
 
 pub format -> Format
-	= "ascii" space v:version { Format::Ascii(v) }
-	/ "binary_big_endian" space v:version { Format::BinaryBigEndian(v) }
-	/ "binary_little_endian" space v:version { Format::BinaryLittleEndian(v) }
+	= "format" space "ascii" space v:version { Format::Ascii(v) }
+	/ "format" space "binary_big_endian" space v:version { Format::BinaryBigEndian(v) }
+	/ "format" space "binary_little_endian" space v:version { Format::BinaryLittleEndian(v) }
 
-pub version -> Version
+version -> Version
 	= maj:uint "." min:uint {
 		Version {
 			major: maj as u16,
@@ -66,3 +66,14 @@ pub property -> Property
 
 pub end_header
 	= "end_header"
+
+pub line -> Line
+	= space? l:trimmed_line space? { l }
+
+trimmed_line -> Line
+	= magic_number { Line::MagicNumber }
+	/ end_header { Line::EndHeader }
+	/ v:format { Line::Format(v) }
+	/ v:comment { Line::Comment(v) }
+	/ v:element { Line::Element(v) }
+	/ v:property { Line::Property(v) }
