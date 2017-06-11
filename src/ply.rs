@@ -1,22 +1,12 @@
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Line {
-	MagicNumber,
-	Format(Format),
-	Comment(Comment),
-	Element(Element),
-	Property(Property),
-	EndHeader
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
 	pub major: u16,
 	pub minor: u8,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Format {
 	Ascii(Version),
 	BinaryBigEndian(Version),
@@ -75,4 +65,10 @@ pub enum DataType {
 	Float,
 	Double,
 	List(Box<DataType>)
+}
+
+pub struct Header {
+	pub format: Format,
+	pub elements: Vec<Element>,
+	pub comments: Vec<Comment>,
 }

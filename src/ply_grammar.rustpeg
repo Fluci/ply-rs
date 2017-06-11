@@ -1,7 +1,10 @@
+/// Grammar for PLY header
+
 pub number -> String
 	= n:$([0-9]+) { n.to_string() }
 
 use super::ply::*;
+use super::parser::*;
 
 space = " "+
 
@@ -13,6 +16,9 @@ ident -> String
 
 text -> String
 	= s:$([^\n\r]+) { s.to_string() }
+
+line_break
+	= "\r\n" / "\n" / "\r"
 
 data_type -> DataType
 	= "char"   { DataType::Char }
@@ -68,7 +74,7 @@ pub end_header
 	= "end_header"
 
 pub line -> Line
-	= space? l:trimmed_line space? { l }
+	= l:trimmed_line space? line_break? { l }
 
 trimmed_line -> Line
 	= magic_number { Line::MagicNumber }

@@ -6,5 +6,5 @@ mod test_grammar {
 }
 
 use self::test_grammar as grammar;
-mod parser;
-mod ply;
+pub mod parser;
+pub mod ply;
