@@ -1,0 +1,68 @@
+pub number -> String
+	= n:$([0-9]+) { n.to_string() }
+
+use super::ply::*;
+
+space = " "+
+
+uint -> u64
+	= n:$([0-9]+) { n.parse().unwrap() }
+
+ident -> String
+	= s:$([a-zA-Z_][a-zA-Z0-9_-]*) { s.to_string() }
+
+text -> String
+	= s:$([^\n\r]+) { s.to_string() }
+
+data_type -> DataType
+	= "char"   { DataType::Char }
+	/ "uchar"  { DataType::UChar }
+	/ "short"  { DataType::Short }
+	/ "ushort" { DataType::UShort }
+	/ "int"    { DataType::Int }
+	/ "uint"   { DataType::UInt }
+	/ "float"  { DataType::Float }
+	/ "double" { DataType::Double }
+	/ "list" space "uchar" space t:data_type {
+		DataType::List(Box::new(t))
+	}
+
+pub magic_number -> ()
+	= "ply"
+
+pub format -> Format
+	= "ascii" space v:version { Format::Ascii(v) }
+	/ "binary_big_endian" space v:version { Format::BinaryBigEndian(v) }
+	/ "binary_little_endian" space v:version { Format::BinaryLittleEndian(v) }
+
+pub version -> Version
+	= maj:uint "." min:uint {
+		Version {
+			major: maj as u16,
+			minor: min as u8,
+		}
+	}
+
+pub comment -> Comment
+	= "comment" space c:text {
+		Comment::new(c.to_string())
+	}
+	/ "comment" space? {
+		Comment::empty()
+	}
+
+pub element -> Element
+	= "element" space id:$(ident) space n:uint {
+		Element::new(id.to_string(), n)
+	}
+
+pub property -> Property
+	= "property" space t:data_type space id:ident {
+		Property {
+			name: id,
+			data_type: t,
+		}
+	}
+
+pub end_header
+	= "end_header"
