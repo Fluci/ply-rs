@@ -108,6 +108,20 @@ pub enum DataType {
     List(Box<DataType>)
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum DataItem {
+    Char(i8),
+    UChar(u8),
+    Short(i16),
+    UShort(u16),
+    Int(i32),
+    UInt(u32),
+    Float(f32),
+    Double(f64),
+    List(Vec<DataItem>)
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct Header {
     pub format: Format,
     pub elements: ItemMap<Element>,
@@ -115,11 +129,17 @@ pub struct Header {
 }
 
 impl Header {
-    fn new(format: Format) -> Self {
+    pub fn new(format: Format) -> Self {
         Header {
             format: format,
             elements: ItemMap::new(),
             comments: Vec::new()
         }
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Ply {
+    pub header: Header,
+    pub payload: ItemMap<Vec<ItemMap<DataItem>>>,
 }

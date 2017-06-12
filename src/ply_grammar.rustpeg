@@ -18,7 +18,7 @@ text -> String
 	= s:$([^\n\r]+) { s.to_string() }
 
 line_break
-	= "\r\n" / "\n" / "\r"
+	= "\r\n" / [\n\r]
 
 data_type -> DataType
 	= "char"   { DataType::Char }
@@ -83,3 +83,9 @@ trimmed_line -> Line
 	/ v:comment { Line::Comment(v) }
 	/ v:element { Line::Element(v) }
 	/ v:property { Line::Property(v) }
+
+any_number -> String
+	= s:$([-+]? [0-9]+("."[0-9]+)?) { s.to_string() }
+
+pub data_line -> Vec<String>
+	= l:(any_number ** space) line_break? {l}

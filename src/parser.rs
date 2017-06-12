@@ -1,5 +1,7 @@
+use std;
 use std::io::{ Read, BufReader, BufRead, Result, Error, ErrorKind };
-
+use std::slice::Iter;
+use std::str::FromStr;
 use grammar;
 use ply::*;
 
@@ -30,12 +32,35 @@ macro_rules! is_line {
         }
     );
 }
+macro_rules! try_io {
+    ($e:expr) => (
+        match $e {
+            Ok(obj) => obj,
+            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
+        }
+    );
+}
 pub struct Parser {
+    line_index : usize,
 }
 
 impl Parser {
-    pub fn read_header<T: Read>(&self, source: T) -> Result<Header> {
-        let mut reader = BufReader::new(source);
+    pub fn new() -> Self {
+        Parser {
+            line_index: 0,
+        }
+    }
+    pub fn read<T: Read>(&mut self, source: &mut T) -> Result<Ply> {
+        let mut source = BufReader::new(source);
+        let header = try!(self.read_header(&mut source));
+        let payload = try!(self.read_payload(&mut source, &header));
+        Ok(Ply{
+            header: header,
+            payload: payload
+        })
+    }
+    pub fn read_header<T: BufRead>(&mut self, reader: &mut T) -> Result<Header> {
+        self.line_index = 1;
         let mut line_str = String::new();
         // read ply
         try!(reader.read_line(&mut line_str));
@@ -44,7 +69,7 @@ impl Parser {
         let mut header_format : Option<Format> = None;
         let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
-        let mut line_index = 1;
+        self.line_index += 1;
         'readlines: loop {
             line_str.clear();
             try!(reader.read_line(&mut line_str));
@@ -53,7 +78,7 @@ impl Parser {
                 Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
                 Ok(Line::MagicNumber) => return Err(Error::new(
                     ErrorKind::InvalidInput,
-                    format!("Unexpected 'ply' found at line {}", line_index)
+                    format!("Unexpected 'ply' found at line {}", self.line_index)
                 )),
                 Ok(Line::Format(ref f)) => (
                     if header_format.is_none() {
@@ -61,7 +86,7 @@ impl Parser {
                     } else if header_format.unwrap() != *f {
                         return Err(Error::new(
                             ErrorKind::InvalidInput,
-                            format!("Found contradicting format definition at line {}", line_index)
+                            format!("Found contradicting format definition at line {}", self.line_index)
                         ));
                     }
                 ),
@@ -83,9 +108,9 @@ impl Parser {
                         header_elements.add(e);
                     }
                 ),
-                Ok(Line::EndHeader) => { break 'readlines; },
+                Ok(Line::EndHeader) => { self.line_index += 1; break 'readlines; },
             };
-            line_index += 1;
+            self.line_index += 1;
         }
         if header_format.is_none() {
             return Err(Error::new(
@@ -98,6 +123,81 @@ impl Parser {
             comments: header_comments,
             elements: header_elements
         })
+    }
+    fn read_payload<T: BufRead>(&mut self, reader: &mut T, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
+        match header.format {
+            Format::Ascii(_) => (),
+            _ => return Err(Error::new(ErrorKind::Other, "not implemented")),
+        };
+        let mut payload = ItemMap::<Vec<ItemMap<DataItem>>>::new();
+        let mut line_str = String::new();
+        for (k, e) in &header.elements {
+            let mut elems = Vec::<ItemMap<DataItem>>::new();
+            for _ in 0..e.count {
+                line_str.clear();
+                try!(reader.read_line(&mut line_str));
+
+                let element = try!(self.read_element_line(&line_str, &e.properties));
+                elems.push(element);
+                self.line_index += 1;
+            }
+            payload.insert(k.clone(), elems);
+        }
+        Ok(payload)
+    }
+    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+        let elems = match grammar::data_line(line) {
+            Ok(e) => e,
+            Err(e) => return Err(Error::new(
+                ErrorKind::InvalidInput,
+                e
+            ))
+        };
+
+        let mut elem_it : Iter<String> = elems.iter();
+        let mut vals = ItemMap::<DataItem>::new();
+        for (k, p) in props {
+            let new_p : DataItem = try!(self.read_properties(&mut elem_it, &p.data_type));
+            vals.insert(k.clone(), new_p);
+        }
+        Ok(vals)
+    }
+    fn parse<T: FromStr>(&self, s: &str) -> Result<T>
+    where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+        let v = s.parse();
+        match v {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Error::new(ErrorKind::InvalidInput, format!("Line {}: Parse error. error: {:?}, value: '{}'", self.line_index, e, s))),
+        }
+    }
+    fn read_properties(&self, elem_iter: &mut Iter<String>, data_type: &DataType) -> Result<DataItem> {
+        let s : &String = match elem_iter.next() {
+            None => return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("Line {}: Expected element of type {:?}, but found nothing.", self.line_index, data_type)
+            )),
+            Some(x) => x
+        };
+        let result = match *data_type {
+            DataType::Char => DataItem::Char(try!(self.parse(s))),
+            DataType::UChar => DataItem::UChar(try_io!(s.parse())),
+            DataType::Short => DataItem::Short(try_io!(s.parse())),
+            DataType::UShort => DataItem::UShort(try_io!(s.parse())),
+            DataType::Int => DataItem::Int(try_io!(s.parse())),
+            DataType::UInt => DataItem::UInt(try_io!(s.parse())),
+            DataType::Float => DataItem::Float(try_io!(s.parse())),
+            DataType::Double => DataItem::Double(try_io!(s.parse())),
+            DataType::List(ref item_type) => {
+                let size : usize = try_io!(s.parse());
+                let mut v = Vec::<DataItem>::new();
+                for _ in 0..size {
+                    let item = try!(self.read_properties(elem_iter, &item_type));
+                    v.push(item);
+                }
+                DataItem::List(v)
+            }
+        };
+        Ok(result)
     }
 }
 
@@ -127,10 +227,10 @@ mod tests {
     }
     #[test]
     fn parser_header_ok(){
-        let p = Parser{};
+        let mut p = Parser::new();
         let txt = "ply\nformat ascii 1.0\nend_header\n";
-        let bytes = txt.as_bytes();
-        assert_ok!(p.read_header(bytes));
+        let mut bytes = txt.as_bytes();
+        assert_ok!(p.read_header(&mut bytes));
 
         let txt = "ply\n\
         format ascii 1.0\n\
@@ -140,8 +240,21 @@ mod tests {
         element face 6\n\
         property list uchar int vertex_index\n\
         end_header\n";
-        let bytes = txt.as_bytes();
-        assert_ok!(p.read_header(bytes));
+        let mut bytes = txt.as_bytes();
+        assert_ok!(p.read_header(&mut bytes));
+    }
+    #[test]
+    fn read_property_ok() {
+        let mut p = Parser::new();
+        let txt = "0 1 2 3";
+        let mut prop = ItemMap::<Property>::new();
+        prop.add(Property{name: "a".to_string(), data_type: DataType::Char});
+        prop.add(Property{name: "b".to_string(), data_type: DataType::UChar});
+        prop.add(Property{name: "c".to_string(), data_type: DataType::Short});
+        prop.add(Property{name: "d".to_string(), data_type: DataType::UShort});
+
+        let items = p.read_element_line(&txt, &prop);
+        assert!(items.is_ok(), format!("error: {:?}", items));
     }
     #[test]
     fn magic_number_ok() {
@@ -220,7 +333,6 @@ mod tests {
             }
         );
     }
-
     #[test]
     fn line_ok() {
         assert_ok!(g::line("ply "), Line::MagicNumber);
@@ -231,6 +343,9 @@ mod tests {
         assert_ok!(g::line("element face 6 "));
         assert_ok!(g::line("property list uchar int vertex_index "));
         assert_ok!(g::line("end_header "));
+    }
+    #[test]
+    fn line_breaks() {
         assert_ok!(g::line("ply \n"), Line::MagicNumber); // Unix, Mac OS X
         assert_ok!(g::line("ply \r"), Line::MagicNumber); // Mac pre OS X
         assert_ok!(g::line("ply \r\n"), Line::MagicNumber); // Windows
