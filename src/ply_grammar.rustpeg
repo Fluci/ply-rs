@@ -57,6 +57,9 @@ pub comment -> Comment
 		Comment::empty()
 	}
 
+pub obj_info -> ObjInfo
+	= "obj_info" space c:text { c.to_string() }
+
 pub element -> Element
 	= "element" space id:$(ident) space n:uint {
 		Element::new(id.to_string(), n)
@@ -80,6 +83,7 @@ trimmed_line -> Line
 	= magic_number { Line::MagicNumber }
 	/ end_header { Line::EndHeader }
 	/ v:format { Line::Format(v) }
+	/ v:obj_info { Line::ObjInfo(v) }
 	/ v:comment { Line::Comment(v) }
 	/ v:element { Line::Element(v) }
 	/ v:property { Line::Property(v) }

@@ -8,6 +8,7 @@ property float z
 property float nx
 property float ny
 property float nz
+obj_info I'm a great help!
 element face 0
 property list uchar uint vertex_indices
 end_header

@@ -10,6 +10,7 @@ pub enum Line {
     MagicNumber,
     Format((Encoding, Version)),
     Comment(Comment),
+    ObjInfo(ObjInfo),
     Element(Element),
     Property(Property),
     EndHeader
@@ -67,6 +68,7 @@ impl Parser {
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
         let mut header_form_ver : Option<(Encoding, Version)> = None;
+        let mut header_obj_infos = Vec::<ObjInfo>::new();
         let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
         self.line_index += 1;
@@ -97,6 +99,9 @@ impl Parser {
                             ));
                         }
                     }
+                ),
+                Ok(Line::ObjInfo(ref o)) => (
+                    header_obj_infos.push(o.clone())
                 ),
                 Ok(Line::Comment(ref c)) => (
                     header_comments.push(c.clone())
@@ -130,6 +135,7 @@ impl Parser {
         Ok(Header{
             encoding: encoding,
             version: version,
+            obj_infos: header_obj_infos,
             comments: header_comments,
             elements: header_elements
         })
@@ -253,6 +259,7 @@ mod tests {
         let mut bytes = txt.as_bytes();
         assert_ok!(p.read_header(&mut bytes));
     }
+    #[test]
     fn parser_demo_ok(){
         let mut p = Parser::new();
         let txt = "ply\nformat ascii 1.0\nend_header\n";
@@ -326,6 +333,10 @@ mod tests {
         assert_err!(g::comment("commentt"));
         assert_err!(g::comment("comment hi\na comment"));
         assert_err!(g::comment("comment hi\r\na comment"));
+    }
+    #[test]
+    fn obj_info_ok() {
+        assert_ok!(g::obj_info("obj_info Hi, I can help."));
     }
     #[test]
     fn element_ok() {

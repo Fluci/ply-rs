@@ -29,8 +29,10 @@ fn read_house() {
 #[test]
 fn read_greg_turk_1() {
     let ply = read_file("tests/plys/greg_turk_example1_ascii.ply");
+    println!("Created ply: {:?}", ply);
 }
 #[test]
 fn read_greg_turk_2() {
     let ply = read_file("tests/plys/greg_turk_example2_ascii.ply");
+    println!("Created ply: {:?}", ply);
 }

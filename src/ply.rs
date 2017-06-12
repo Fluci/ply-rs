@@ -29,6 +29,8 @@ impl<V> Access<V> for ItemMap<V> {
     }
 }
 
+pub type ObjInfo = String;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
     pub major: u16,
@@ -125,6 +127,7 @@ pub enum DataItem {
 pub struct Header {
     pub encoding: Encoding,
     pub version: Version,
+    pub obj_infos: Vec<ObjInfo>,
     pub elements: ItemMap<Element>,
     pub comments: Vec<Comment>,
 }
@@ -134,6 +137,7 @@ impl Header {
         Header {
             encoding: encoding,
             version: Version{major: 1, minor: 0},
+            obj_infos: Vec::new(),
             elements: ItemMap::new(),
             comments: Vec::new()
         }
