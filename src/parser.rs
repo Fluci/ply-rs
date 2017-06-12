@@ -253,6 +253,21 @@ mod tests {
         let mut bytes = txt.as_bytes();
         assert_ok!(p.read_header(&mut bytes));
     }
+    fn parser_demo_ok(){
+        let mut p = Parser::new();
+        let txt = "ply\nformat ascii 1.0\nend_header\n";
+        let mut bytes = txt.as_bytes();
+        assert_ok!(p.read_header(&mut bytes));
+
+        let txt = "ply\n\
+        format ascii 1.0\n\
+        element vertex 1\n\
+        property float x\n\
+        end_header\n
+        6.28318530718"; // no newline at end!
+        let mut bytes = txt.as_bytes();
+        assert_ok!(p.read_header(&mut bytes));
+    }
     #[test]
     fn read_property_ok() {
         let p = Parser::new();
