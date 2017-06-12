@@ -8,7 +8,7 @@ use ply::*;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Line {
     MagicNumber,
-    Format(Format),
+    Format((Format, Version)),
     Comment(Comment),
     Element(Element),
     Property(Property),
@@ -66,7 +66,7 @@ impl Parser {
         try!(reader.read_line(&mut line_str));
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
-        let mut header_format : Option<Format> = None;
+        let mut header_form_ver : Option<(Format, Version)> = None;
         let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
         self.line_index += 1;
@@ -80,14 +80,22 @@ impl Parser {
                     ErrorKind::InvalidInput,
                     format!("Unexpected 'ply' found at line {}", self.line_index)
                 )),
-                Ok(Line::Format(ref f)) => (
-                    if header_format.is_none() {
-                        header_format = Some(f.clone());
-                    } else if header_format.unwrap() != *f {
-                        return Err(Error::new(
-                            ErrorKind::InvalidInput,
-                            format!("Found contradicting format definition at line {}", self.line_index)
-                        ));
+                Ok(Line::Format(ref t)) => (
+                    if header_form_ver.is_none() {
+                        header_form_ver = Some(t.clone());
+                    } else {
+                        let fv = header_form_ver.unwrap();
+                        if fv != *t {
+                            return Err(Error::new(
+                                ErrorKind::InvalidInput,
+                                format!(
+                                    "Line {}: Found contradicting format definition:\n\
+                                    \tFormat: {:?}, Version: {:?}\n\
+                                    previous definition:\n\
+                                    \tFormat: {:?}, Version: {:?}",
+                                    self.line_index, t.0, t.1, fv.0, fv.1)
+                            ));
+                        }
                     }
                 ),
                 Ok(Line::Comment(ref c)) => (
@@ -112,21 +120,23 @@ impl Parser {
             };
             self.line_index += 1;
         }
-        if header_format.is_none() {
+        if header_form_ver.is_none() {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "No format line found."
             ));
         }
+        let (form, version) = header_form_ver.unwrap();
         Ok(Header{
-            format: header_format.unwrap().clone(),
+            format: form,
+            version: version,
             comments: header_comments,
             elements: header_elements
         })
     }
     fn read_payload<T: BufRead>(&mut self, reader: &mut T, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
         match header.format {
-            Format::Ascii(_) => (),
+            Format::Ascii => (),
             _ => return Err(Error::new(ErrorKind::Other, "not implemented")),
         };
         let mut payload = ItemMap::<Vec<ItemMap<DataItem>>>::new();
@@ -245,7 +255,7 @@ mod tests {
     }
     #[test]
     fn read_property_ok() {
-        let mut p = Parser::new();
+        let p = Parser::new();
         let txt = "0 1 2 3";
         let mut prop = ItemMap::<Property>::new();
         prop.add(Property{name: "a".to_string(), data_type: DataType::Char});
@@ -270,15 +280,15 @@ mod tests {
     fn format_ok() {
         assert_ok!(
             g::format("format ascii 1.0"),
-            Format::Ascii(Version{major: 1, minor: 0})
+            (Format::Ascii, Version{major: 1, minor: 0})
         );
         assert_ok!(
             g::format("format binary_big_endian 2.1"),
-            Format::BinaryBigEndian(Version{major: 2, minor: 1})
+            (Format::BinaryBigEndian, Version{major: 2, minor: 1})
         );
         assert_ok!(
             g::format("format binary_little_endian 1.0"),
-            Format::BinaryLittleEndian(Version{major: 1, minor: 0})
+            (Format::BinaryLittleEndian, Version{major: 1, minor: 0})
         );
     }
     #[test]
@@ -336,7 +346,7 @@ mod tests {
     #[test]
     fn line_ok() {
         assert_ok!(g::line("ply "), Line::MagicNumber);
-        assert_ok!(g::line("format ascii 1.0 "), Line::Format(Format::Ascii(Version{major: 1, minor: 0})));
+        assert_ok!(g::line("format ascii 1.0 "), Line::Format((Format::Ascii, Version{major: 1, minor: 0})));
         assert_ok!(g::line("comment a very nice comment "));
         assert_ok!(g::line("element vertex 8 "));
         assert_ok!(g::line("property float x "));

@@ -6,7 +6,7 @@ pub number -> String
 use super::ply::*;
 use super::parser::*;
 
-space = " "+
+space = [ \t]+
 
 uint -> u64
 	= n:$([0-9]+) { n.parse().unwrap() }
@@ -36,10 +36,10 @@ data_type -> DataType
 pub magic_number
 	= "ply"
 
-pub format -> Format
-	= "format" space "ascii" space v:version { Format::Ascii(v) }
-	/ "format" space "binary_big_endian" space v:version { Format::BinaryBigEndian(v) }
-	/ "format" space "binary_little_endian" space v:version { Format::BinaryLittleEndian(v) }
+pub format -> (Format, Version)
+	= "format" space "ascii" space v:version { (Format::Ascii, v) }
+	/ "format" space "binary_big_endian" space v:version { (Format::BinaryBigEndian, v) }
+	/ "format" space "binary_little_endian" space v:version { (Format::BinaryLittleEndian, v) }
 
 version -> Version
 	= maj:uint "." min:uint {
