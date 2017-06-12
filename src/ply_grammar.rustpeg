@@ -36,10 +36,10 @@ data_type -> DataType
 pub magic_number
 	= "ply"
 
-pub format -> (Format, Version)
-	= "format" space "ascii" space v:version { (Format::Ascii, v) }
-	/ "format" space "binary_big_endian" space v:version { (Format::BinaryBigEndian, v) }
-	/ "format" space "binary_little_endian" space v:version { (Format::BinaryLittleEndian, v) }
+pub format -> (Encoding, Version)
+	= "format" space "ascii" space v:version { (Encoding::Ascii, v) }
+	/ "format" space "binary_big_endian" space v:version { (Encoding::BinaryBigEndian, v) }
+	/ "format" space "binary_little_endian" space v:version { (Encoding::BinaryLittleEndian, v) }
 
 version -> Version
 	= maj:uint "." min:uint {

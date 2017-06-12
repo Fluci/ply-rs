@@ -36,7 +36,7 @@ pub struct Version {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Format {
+pub enum Encoding {
     Ascii,
     BinaryBigEndian,
     BinaryLittleEndian,
@@ -123,16 +123,16 @@ pub enum DataItem {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Header {
-    pub format: Format,
+    pub encoding: Encoding,
     pub version: Version,
     pub elements: ItemMap<Element>,
     pub comments: Vec<Comment>,
 }
 
 impl Header {
-    pub fn new(format: Format) -> Self {
+    pub fn new(encoding: Encoding) -> Self {
         Header {
-            format: format,
+            encoding: encoding,
             version: Version{major: 1, minor: 0},
             elements: ItemMap::new(),
             comments: Vec::new()

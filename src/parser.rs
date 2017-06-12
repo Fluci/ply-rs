@@ -8,7 +8,7 @@ use ply::*;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Line {
     MagicNumber,
-    Format((Format, Version)),
+    Format((Encoding, Version)),
     Comment(Comment),
     Element(Element),
     Property(Property),
@@ -66,7 +66,7 @@ impl Parser {
         try!(reader.read_line(&mut line_str));
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
-        let mut header_form_ver : Option<(Format, Version)> = None;
+        let mut header_form_ver : Option<(Encoding, Version)> = None;
         let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
         self.line_index += 1;
@@ -84,16 +84,16 @@ impl Parser {
                     if header_form_ver.is_none() {
                         header_form_ver = Some(t.clone());
                     } else {
-                        let fv = header_form_ver.unwrap();
-                        if fv != *t {
+                        let f = header_form_ver.unwrap();
+                        if f != *t {
                             return Err(Error::new(
                                 ErrorKind::InvalidInput,
                                 format!(
                                     "Line {}: Found contradicting format definition:\n\
-                                    \tFormat: {:?}, Version: {:?}\n\
+                                    \tEncoding: {:?}, Version: {:?}\n\
                                     previous definition:\n\
-                                    \tFormat: {:?}, Version: {:?}",
-                                    self.line_index, t.0, t.1, fv.0, fv.1)
+                                    \tEncoding: {:?}, Version: {:?}",
+                                    self.line_index, t.0, t.1, f.0, f.1)
                             ));
                         }
                     }
@@ -126,17 +126,17 @@ impl Parser {
                 "No format line found."
             ));
         }
-        let (form, version) = header_form_ver.unwrap();
+        let (encoding, version) = header_form_ver.unwrap();
         Ok(Header{
-            format: form,
+            encoding: encoding,
             version: version,
             comments: header_comments,
             elements: header_elements
         })
     }
     fn read_payload<T: BufRead>(&mut self, reader: &mut T, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
-        match header.format {
-            Format::Ascii => (),
+        match header.encoding {
+            Encoding::Ascii => (),
             _ => return Err(Error::new(ErrorKind::Other, "not implemented")),
         };
         let mut payload = ItemMap::<Vec<ItemMap<DataItem>>>::new();
@@ -280,15 +280,15 @@ mod tests {
     fn format_ok() {
         assert_ok!(
             g::format("format ascii 1.0"),
-            (Format::Ascii, Version{major: 1, minor: 0})
+            (Encoding::Ascii, Version{major: 1, minor: 0})
         );
         assert_ok!(
             g::format("format binary_big_endian 2.1"),
-            (Format::BinaryBigEndian, Version{major: 2, minor: 1})
+            (Encoding::BinaryBigEndian, Version{major: 2, minor: 1})
         );
         assert_ok!(
             g::format("format binary_little_endian 1.0"),
-            (Format::BinaryLittleEndian, Version{major: 1, minor: 0})
+            (Encoding::BinaryLittleEndian, Version{major: 1, minor: 0})
         );
     }
     #[test]
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn line_ok() {
         assert_ok!(g::line("ply "), Line::MagicNumber);
-        assert_ok!(g::line("format ascii 1.0 "), Line::Format((Format::Ascii, Version{major: 1, minor: 0})));
+        assert_ok!(g::line("format ascii 1.0 "), Line::Format((Encoding::Ascii, Version{major: 1, minor: 0})));
         assert_ok!(g::line("comment a very nice comment "));
         assert_ok!(g::line("element vertex 8 "));
         assert_ok!(g::line("property float x "));
