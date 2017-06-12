@@ -51,10 +51,10 @@ version -> Version
 
 pub comment -> Comment
 	= "comment" space c:text {
-		Comment::new(c.to_string())
+		c.to_string()
 	}
 	/ "comment" space? {
-		Comment::empty()
+		String::new()
 	}
 
 pub obj_info -> ObjInfo

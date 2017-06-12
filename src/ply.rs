@@ -30,6 +30,7 @@ impl<V> Access<V> for ItemMap<V> {
 }
 
 pub type ObjInfo = String;
+pub type Comment = String;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
@@ -42,24 +43,6 @@ pub enum Encoding {
     Ascii,
     BinaryBigEndian,
     BinaryLittleEndian,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Comment {
-    pub message: String,
-}
-
-impl Comment {
-    pub fn new(message: String) -> Self {
-        Comment {
-            message: message
-        }
-    }
-    pub fn empty() -> Self {
-        Comment {
-            message: String::new()
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

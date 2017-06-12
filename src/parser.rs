@@ -323,7 +323,7 @@ mod tests {
         assert_ok!(g::comment("comment hi"));
         assert_ok!(
             g::comment("comment   hi, I'm a comment!"),
-            Comment{message: "hi, I'm a comment!".to_string()}
+            "hi, I'm a comment!"
         );
         assert_ok!(g::comment("comment "));
         assert_ok!(g::comment("comment"));
