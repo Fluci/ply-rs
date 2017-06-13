@@ -56,7 +56,7 @@ impl Writer {
             DataType::Short => out.write("short".as_bytes()),
             DataType::UShort => out.write("ushort".as_bytes()),
             DataType::Int => out.write("int".as_bytes()),
-            DataType::UInt => out.write("int".as_bytes()),
+            DataType::UInt => out.write("uint".as_bytes()),
             DataType::Float => out.write("float".as_bytes()),
             DataType::Double => out.write("double".as_bytes()),
             DataType::List(ref t) => {
