@@ -3,16 +3,16 @@ use ply_rs::*;
 
 fn read_file_ok(path: &str) -> ply::Ply {
     let mut f = std::fs::File::open(path).unwrap();
-    let mut p = parser::Parser::new();
-    let ply = p.read(&mut f);
+    let p = parser::Parser::new();
+    let ply = p.read_ply(&mut f);
     assert!(ply.is_ok(), format!("failed: {}", ply.err().unwrap()));
     ply.unwrap()
 }
 
 fn read_file_err(path: &str) {
     let mut f = std::fs::File::open(path).unwrap();
-    let mut p = parser::Parser::new();
-    let ply = p.read(&mut f);
+    let p = parser::Parser::new();
+    let ply = p.read_ply(&mut f);
     assert!(ply.is_err(), format!("ply should have failed: {:?}", ply.unwrap()));
 }
 

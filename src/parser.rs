@@ -78,13 +78,8 @@ impl Parser {
         let mut line = LocationTracker::new();
         self.__read_header(reader, &mut line)
     }
-    pub fn read_header_line<T: BufRead>(&self, reader: &mut T) -> Result<Line> {
-        let mut line_str = &mut String::new();
-        let result = self.__read_header_line(reader, &mut line_str);
-        result
-    }
-    pub fn read_header_line_str(&self, line: &String) -> Result<Line> {
-        match self.__read_header_line_str(line) {
+    pub fn read_header_line(&self, line: &str) -> Result<Line> {
+        match self.__read_header_line(line) {
             Ok(l) => Ok(l),
             Err(e) => Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -96,24 +91,14 @@ impl Parser {
         let mut location = LocationTracker::new();
         self.__read_payload(reader, &mut location, header)
     }
-    pub fn read_element_line(&self, line: &String, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
         self.__read_element_line(line, props)
     }
 }
 
 impl Parser {
-    fn __read_header_line_str(&self, line_str: &String) -> result::Result<Line, grammar::ParseError> {
+    fn __read_header_line(&self, line_str: &str) -> result::Result<Line, grammar::ParseError> {
         grammar::line(line_str)
-    }
-    fn __read_header_line<T: BufRead>(&self, reader: &mut T, line_str: &mut String) -> Result<Line> {
-        try!(reader.read_line(line_str));
-        match grammar::line(&line_str) {
-            Ok(l) => Ok(l),
-            Err(e) => Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("Couldn't parse line.\n\tString: {}\n\tError: {:?}", &line_str, e)
-            )),
-        }
     }
     fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
         location.next_line();
@@ -129,11 +114,9 @@ impl Parser {
         location.next_line();
         'readlines: loop {
             line_str.clear();
-
             try!(reader.read_line(&mut line_str));
-            let line = self.__read_header_line_str(&line_str);
+            let line = self.__read_header_line(&line_str);
 
-            let line = self.__read_header_line(reader, &mut line_str);
             match line {
                 Err(ref e) => return parse_fail(location, &line_str, e, "Couldn't parse line."),
                 Ok(Line::MagicNumber) => return parse_error(location, &line_str, "Unexpected 'ply' found."),
@@ -351,7 +334,7 @@ mod tests {
         2 4\r\n";
         let mut bytes = txt.as_bytes();
         let mut p = Parser::new();
-        assert_ok!(p.read(&mut bytes));
+        assert_ok!(p.read_ply(&mut bytes));
     }
     #[test]
     fn read_property_ok() {
