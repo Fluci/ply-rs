@@ -1,7 +1,9 @@
 use std;
 use std::io::{ Read, BufReader, BufRead, Result, Error, ErrorKind };
+use std::fmt::Debug;
 use std::slice::Iter;
 use std::str::FromStr;
+use std::result;
 use grammar;
 use ply::*;
 
@@ -28,36 +30,93 @@ macro_rules! is_line {
         }
     );
 }
-macro_rules! try_io {
-    ($e:expr) => (
-        match $e {
-            Ok(obj) => obj,
-            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
-        }
-    );
-}
 
-pub struct Parser {
-    line_index : usize,
+struct LocationTracker {
+    line_index: usize
 }
-
-impl Parser {
-    pub fn new() -> Self {
-        Parser {
-            line_index: 0,
+impl LocationTracker {
+    fn new() -> Self {
+        LocationTracker {
+            line_index: 0
         }
     }
-    pub fn read<T: Read>(&mut self, source: &mut T) -> Result<Ply> {
+    fn next_line(&mut self) {
+        self.line_index += 1;
+    }
+}
+
+fn parse_fail<T, E: Debug>(location: &LocationTracker, line_str: &str, e: &E, message: &str) -> Result<T> {
+    Err(Error::new(
+        ErrorKind::InvalidInput,
+        format!("Line {}: {}\n\tString: '{}'\n\tError: {:?}", location.line_index, message, line_str, e)
+    ))
+}
+fn parse_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> Result<T> {
+    Err(Error::new(
+        ErrorKind::InvalidInput,
+        format!("Line {}: {}\n\tString: '{}'", location.line_index, message, line_str)
+    ))
+}
+
+
+pub struct Parser {}
+impl Parser {
+    pub fn new() -> Self {
+        Parser {}
+    }
+    pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply> {
         let mut source = BufReader::new(source);
-        let header = try!(self.read_header(&mut source));
-        let payload = try!(self.read_payload(&mut source, &header));
+        let mut location = LocationTracker::new();
+        let header = try!(self.__read_header(&mut source, &mut location));
+        let payload = try!(self.__read_payload(&mut source, &mut location, &header));
         Ok(Ply{
             header: header,
             payload: payload
         })
     }
-    pub fn read_header<T: BufRead>(&mut self, reader: &mut T) -> Result<Header> {
-        self.line_index = 1;
+    pub fn read_header<T: BufRead>(&self, reader: &mut T) -> Result<Header> {
+        let mut line = LocationTracker::new();
+        self.__read_header(reader, &mut line)
+    }
+    pub fn read_header_line<T: BufRead>(&self, reader: &mut T) -> Result<Line> {
+        let mut line_str = &mut String::new();
+        let result = self.__read_header_line(reader, &mut line_str);
+        result
+    }
+    pub fn read_header_line_str(&self, line: &String) -> Result<Line> {
+        match self.__read_header_line_str(line) {
+            Ok(l) => Ok(l),
+            Err(e) => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("Couldn't parse line.\n\tString: {}\n\tError: {:?}", line, e)
+            )),
+        }
+    }
+    pub fn read_payload<T: BufRead>(&self, reader: &mut T, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
+        let mut location = LocationTracker::new();
+        self.__read_payload(reader, &mut location, header)
+    }
+    pub fn read_element_line(&self, line: &String, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+        self.__read_element_line(line, props)
+    }
+}
+
+impl Parser {
+    fn __read_header_line_str(&self, line_str: &String) -> result::Result<Line, grammar::ParseError> {
+        grammar::line(line_str)
+    }
+    fn __read_header_line<T: BufRead>(&self, reader: &mut T, line_str: &mut String) -> Result<Line> {
+        try!(reader.read_line(line_str));
+        match grammar::line(&line_str) {
+            Ok(l) => Ok(l),
+            Err(e) => Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("Couldn't parse line.\n\tString: {}\n\tError: {:?}", &line_str, e)
+            )),
+        }
+    }
+    fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
+        location.next_line();
         let mut line_str = String::new();
         // read ply
         try!(reader.read_line(&mut line_str));
@@ -67,33 +126,33 @@ impl Parser {
         let mut header_obj_infos = Vec::<ObjInfo>::new();
         let mut header_elements = ItemMap::<Element>::new();
         let mut header_comments = Vec::<Comment>::new();
-        self.line_index += 1;
+        location.next_line();
         'readlines: loop {
             line_str.clear();
+
             try!(reader.read_line(&mut line_str));
-            let line = grammar::line(&line_str);
+            let line = self.__read_header_line_str(&line_str);
+
+            let line = self.__read_header_line(reader, &mut line_str);
             match line {
-                Err(e) => return Err(Error::new(ErrorKind::InvalidInput,
-                    format!("Line {}: Couldn't read element Line '{}', error: {}", self.line_index, line_str, e))),
-                Ok(Line::MagicNumber) => return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    format!("Unexpected 'ply' found at line {}", self.line_index)
-                )),
+                Err(ref e) => return parse_fail(location, &line_str, e, "Couldn't parse line."),
+                Ok(Line::MagicNumber) => return parse_error(location, &line_str, "Unexpected 'ply' found."),
                 Ok(Line::Format(ref t)) => (
                     if header_form_ver.is_none() {
                         header_form_ver = Some(t.clone());
                     } else {
                         let f = header_form_ver.unwrap();
                         if f != *t {
-                            return Err(Error::new(
-                                ErrorKind::InvalidInput,
-                                format!(
-                                    "Line {}: Found contradicting format definition:\n\
+                            return parse_error(
+                                location,
+                                &line_str,
+                                &format!(
+                                    "Found contradicting format definition:\n\
                                     \tEncoding: {:?}, Version: {:?}\n\
                                     previous definition:\n\
                                     \tEncoding: {:?}, Version: {:?}",
-                                    self.line_index, t.0, t.1, f.0, f.1)
-                            ));
+                                    t.0, t.1, f.0, f.1)
+                            )
                         }
                     }
                 ),
@@ -108,19 +167,20 @@ impl Parser {
                 },
                 Ok(Line::Property(p)) => (
                     if header_elements.is_empty() {
-                        return Err(Error::new(
-                            ErrorKind::InvalidInput,
-                            format!("Property {:?} found without preceding element.", p)
-                        ));
+                        return parse_error(
+                            location,
+                            &line_str,
+                            &format!("Property '{:?}' found without preceding element.", p)
+                        );
                     } else {
                         let (_, mut e) = header_elements.pop_back().unwrap();
                         e.properties.add(p);
                         header_elements.add(e);
                     }
                 ),
-                Ok(Line::EndHeader) => { self.line_index += 1; break 'readlines; },
+                Ok(Line::EndHeader) => { location.next_line(); break 'readlines; },
             };
-            self.line_index += 1;
+            location.next_line();
         }
         if header_form_ver.is_none() {
             return Err(Error::new(
@@ -137,10 +197,10 @@ impl Parser {
             elements: header_elements
         })
     }
-    fn read_payload<T: BufRead>(&mut self, reader: &mut T, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
+    fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<ItemMap<Vec<ItemMap<DataItem>>>> {
         match header.encoding {
             Encoding::Ascii => (),
-            _ => return Err(Error::new(ErrorKind::Other, "not implemented")),
+            e => return Err(Error::new(ErrorKind::Other, format!("Encoding '{}' not implemented.", e))),
         };
         let mut payload = ItemMap::<Vec<ItemMap<DataItem>>>::new();
         let mut line_str = String::new();
@@ -150,21 +210,24 @@ impl Parser {
                 line_str.clear();
                 try!(reader.read_line(&mut line_str));
 
-                let element = try!(self.read_element_line(&line_str, &e.properties));
+                let element = match self.__read_element_line(&line_str, &e.properties) {
+                    Ok(e) => e,
+                    Err(ref e) => return parse_fail(location, &line_str, e, "Couln't read element line.")
+                };
                 elems.push(element);
-                self.line_index += 1;
+                location.next_line();
             }
             payload.insert(k.clone(), elems);
         }
         Ok(payload)
     }
-    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+    fn __read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
-            Err(e) => return Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("Line: {}: Couldn't read element line '{}', error: {}", self.line_index, line, e)
-            ))
+            Err(ref e) => return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't parse element line.\n\tString: '{}'\n\tError: {}", line, e)
+                )),
         };
 
         let mut elem_it : Iter<String> = elems.iter();
@@ -180,28 +243,29 @@ impl Parser {
         let v = s.parse();
         match v {
             Ok(r) => Ok(r),
-            Err(e) => Err(Error::new(ErrorKind::InvalidInput, format!("Line {}: Parse error. error: {:?}, value: '{}'", self.line_index, e, s))),
+            Err(e) => Err(Error::new(ErrorKind::InvalidInput,
+                format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
         }
     }
     fn read_properties(&self, elem_iter: &mut Iter<String>, data_type: &DataType) -> Result<DataItem> {
         let s : &String = match elem_iter.next() {
             None => return Err(Error::new(
                 ErrorKind::InvalidInput,
-                format!("Line {}: Expected element of type {:?}, but found nothing.", self.line_index, data_type)
+                format!("Expected element of type '{:?}', but found nothing.", data_type)
             )),
             Some(x) => x
         };
         let result = match *data_type {
             DataType::Char => DataItem::Char(try!(self.parse(s))),
-            DataType::UChar => DataItem::UChar(try_io!(s.parse())),
-            DataType::Short => DataItem::Short(try_io!(s.parse())),
-            DataType::UShort => DataItem::UShort(try_io!(s.parse())),
-            DataType::Int => DataItem::Int(try_io!(s.parse())),
-            DataType::UInt => DataItem::UInt(try_io!(s.parse())),
-            DataType::Float => DataItem::Float(try_io!(s.parse())),
-            DataType::Double => DataItem::Double(try_io!(s.parse())),
+            DataType::UChar => DataItem::UChar(try!(self.parse(s))),
+            DataType::Short => DataItem::Short(try!(self.parse(s))),
+            DataType::UShort => DataItem::UShort(try!(self.parse(s))),
+            DataType::Int => DataItem::Int(try!(self.parse(s))),
+            DataType::UInt => DataItem::UInt(try!(self.parse(s))),
+            DataType::Float => DataItem::Float(try!(self.parse(s))),
+            DataType::Double => DataItem::Double(try!(self.parse(s))),
             DataType::List(ref item_type) => {
-                let size : usize = try_io!(s.parse());
+                let size : usize = try!(self.parse(s));
                 let mut v = Vec::<DataItem>::new();
                 for _ in 0..size {
                     let item = try!(self.read_properties(elem_iter, &item_type));
