@@ -4,7 +4,7 @@ use ply_rs::ply::*;
 use std::io::{ Read, BufReader };
 
 fn read_buff<T: Read>(mut buf: &mut T) -> ply::Ply {
-    let mut p = parser::Parser::new();
+    let p = parser::Parser::new();
     let ply = p.read_ply(&mut buf);
     assert!(ply.is_ok(), format!("failed: {}", ply.err().unwrap()));
     ply.unwrap()

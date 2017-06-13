@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::result;
 use grammar;
 use ply::*;
+use util::LocationTracker;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Line {
@@ -31,21 +32,7 @@ macro_rules! is_line {
     );
 }
 
-struct LocationTracker {
-    line_index: usize
-}
-impl LocationTracker {
-    fn new() -> Self {
-        LocationTracker {
-            line_index: 0
-        }
-    }
-    fn next_line(&mut self) {
-        self.line_index += 1;
-    }
-}
-
-fn parse_fail<T, E: Debug>(location: &LocationTracker, line_str: &str, e: &E, message: &str) -> Result<T> {
+fn parse_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(Error::new(
         ErrorKind::InvalidInput,
         format!("Line {}: {}\n\tString: '{}'\n\tError: {:?}", location.line_index, message, line_str, e)
@@ -103,8 +90,12 @@ impl Parser {
     fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
         location.next_line();
         let mut line_str = String::new();
-        // read ply
         try!(reader.read_line(&mut line_str));
+        match self.__read_header_line(&line_str) {
+            Ok(Line::MagicNumber) => (),
+            Ok(l) => return parse_error(location, &line_str, &format!("Expected magic number 'ply', but saw '{:?}'.", l)),
+            Err(e) => return parse_rethrow(location, &line_str, e, "Expected magic number 'ply'.")
+        }
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
         let mut header_form_ver : Option<(Encoding, Version)> = None;
@@ -118,7 +109,7 @@ impl Parser {
             let line = self.__read_header_line(&line_str);
 
             match line {
-                Err(ref e) => return parse_fail(location, &line_str, e, "Couldn't parse line."),
+                Err(e) => return parse_rethrow(location, &line_str, e, "Couldn't parse line."),
                 Ok(Line::MagicNumber) => return parse_error(location, &line_str, "Unexpected 'ply' found."),
                 Ok(Line::Format(ref t)) => (
                     if header_form_ver.is_none() {
@@ -195,7 +186,7 @@ impl Parser {
 
                 let element = match self.__read_element_line(&line_str, &e.properties) {
                     Ok(e) => e,
-                    Err(ref e) => return parse_fail(location, &line_str, e, "Couln't read element line.")
+                    Err(e) => return parse_rethrow(location, &line_str, e, "Couln't read element line.")
                 };
                 elems.push(element);
                 location.next_line();
@@ -287,7 +278,7 @@ mod tests {
     }
     #[test]
     fn parser_header_ok(){
-        let mut p = Parser::new();
+        let p = Parser::new();
         let txt = "ply\nformat ascii 1.0\nend_header\n";
         let mut bytes = txt.as_bytes();
         assert_ok!(p.read_header(&mut bytes));
@@ -307,7 +298,7 @@ mod tests {
     fn parser_demo_ok(){
         let txt = "ply\nformat ascii 1.0\nend_header\n";
         let mut bytes = txt.as_bytes();
-        let mut p = Parser::new();
+        let p = Parser::new();
         assert_ok!(p.read_header(&mut bytes));
 
         let txt = "ply\n\
@@ -321,8 +312,7 @@ mod tests {
     }
     #[test]
     fn parser_single_elements_ok(){
-        let txt = "
-        ply\r\n\
+        let txt = "ply\r\n\
         format ascii 1.0\r\n\
         comment Hi, I'm your friendly comment.\r\n\
         obj_info And I'm your object information.\r\n\
@@ -333,7 +323,7 @@ mod tests {
         -7 5\r\n\
         2 4\r\n";
         let mut bytes = txt.as_bytes();
-        let mut p = Parser::new();
+        let p = Parser::new();
         assert_ok!(p.read_ply(&mut bytes));
     }
     #[test]
@@ -442,9 +432,13 @@ mod tests {
         assert_ok!(g::line("end_header "));
     }
     #[test]
-    fn line_breaks() {
+    fn line_breaks_ok() {
         assert_ok!(g::line("ply \n"), Line::MagicNumber); // Unix, Mac OS X
         assert_ok!(g::line("ply \r"), Line::MagicNumber); // Mac pre OS X
         assert_ok!(g::line("ply \r\n"), Line::MagicNumber); // Windows
+    }
+    #[test]
+    fn data_line_ok() {
+        assert_ok!(g::data_line("-7 +5.21 \r\n"));
     }
 }

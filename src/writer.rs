@@ -2,15 +2,11 @@ use std::io;
 use std::string::ToString;
 use ply::*;
 
-pub struct Writer {
-    line_index : usize,
-}
+pub struct Writer {}
 
 impl Writer {
     pub fn new() -> Self {
-        Writer {
-            line_index: 0,
-        }
+        Writer {}
     }
     // TODO: think about masking and valid/invalid symbols
     pub fn write_ply<T: io::Write>(&mut self, out: &mut T, ply: &Ply) -> io::Result<usize> {
