@@ -7,3 +7,4 @@ mod test_grammar {
 use self::test_grammar as grammar;
 pub mod parser;
 pub mod ply;
+pub mod writer;

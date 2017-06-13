@@ -1,3 +1,4 @@
+use std::fmt::{ Display, Formatter, Error };
 use linked_hash_map::LinkedHashMap;
 
 pub trait Addable<V: Key> {
@@ -31,6 +32,10 @@ impl<V> Access<V> for ItemMap<V> {
 
 pub type ObjInfo = String;
 pub type Comment = String;
+/// one line in the payload section is an element
+pub type PayloadElement = ItemMap<DataItem>;
+/// The part after `end_header`.
+pub type Payload = ItemMap<Vec<PayloadElement>>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
@@ -38,11 +43,29 @@ pub struct Version {
     pub minor: u8,
 }
 
+impl Display for Version {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        f.write_str(&format!("{}.{}", self.major, self.minor))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Encoding {
     Ascii,
     BinaryBigEndian,
     BinaryLittleEndian,
+}
+
+impl Display for Encoding {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        f.write_str(
+            match *self {
+                Encoding::Ascii => "ascii",
+                Encoding::BinaryBigEndian => "binary_big_endian",
+                Encoding::BinaryLittleEndian => "binary_little_endian",
+            }
+        )
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -72,6 +95,15 @@ impl Key for Element {
 pub struct Property {
     pub name: String,
     pub data_type: DataType,
+}
+
+impl Property {
+    pub fn new(name: String, data_type: DataType) -> Self {
+        Property {
+            name: name,
+            data_type: data_type,
+        }
+    }
 }
 
 impl Key for Property {
@@ -126,9 +158,18 @@ impl Header {
         }
     }
 }
-
-#[derive(Debug, PartialEq, Clone)]
+// TODO: PartialEq? be careful with consistency between payload and header.elements!
+#[derive(Debug, Clone)]
 pub struct Ply {
     pub header: Header,
-    pub payload: ItemMap<Vec<ItemMap<DataItem>>>,
+    pub payload: Payload,
+}
+
+impl Ply {
+    pub fn new(header: Header) -> Self {
+        Ply {
+            header: header,
+            payload: Payload::new(),
+        }
+    }
 }

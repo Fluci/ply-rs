@@ -16,11 +16,6 @@ pub enum Line {
     EndHeader
 }
 
-macro_rules! read_line {
-    ($e:expr) => (
-
-    );
-}
 macro_rules! is_line {
     ($e:expr, $t:ty) => (
         match $e {
@@ -41,6 +36,7 @@ macro_rules! try_io {
         }
     );
 }
+
 pub struct Parser {
     line_index : usize,
 }
@@ -77,7 +73,8 @@ impl Parser {
             try!(reader.read_line(&mut line_str));
             let line = grammar::line(&line_str);
             match line {
-                Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
+                Err(e) => return Err(Error::new(ErrorKind::InvalidInput,
+                    format!("Line {}: Couldn't read element Line '{}', error: {}", self.line_index, line_str, e))),
                 Ok(Line::MagicNumber) => return Err(Error::new(
                     ErrorKind::InvalidInput,
                     format!("Unexpected 'ply' found at line {}", self.line_index)
@@ -166,7 +163,7 @@ impl Parser {
             Ok(e) => e,
             Err(e) => return Err(Error::new(
                 ErrorKind::InvalidInput,
-                e
+                format!("Line: {}: Couldn't read element line '{}', error: {}", self.line_index, line, e)
             ))
         };
 
@@ -261,9 +258,9 @@ mod tests {
     }
     #[test]
     fn parser_demo_ok(){
-        let mut p = Parser::new();
         let txt = "ply\nformat ascii 1.0\nend_header\n";
         let mut bytes = txt.as_bytes();
+        let mut p = Parser::new();
         assert_ok!(p.read_header(&mut bytes));
 
         let txt = "ply\n\
@@ -274,6 +271,23 @@ mod tests {
         6.28318530718"; // no newline at end!
         let mut bytes = txt.as_bytes();
         assert_ok!(p.read_header(&mut bytes));
+    }
+    #[test]
+    fn parser_single_elements_ok(){
+        let txt = "
+        ply\r\n\
+        format ascii 1.0\r\n\
+        comment Hi, I'm your friendly comment.\r\n\
+        obj_info And I'm your object information.\r\n\
+        element point 2\r\n\
+        property int x\r\n\
+        property int y\r\n\
+        end_header\r\n\
+        -7 5\r\n\
+        2 4\r\n";
+        let mut bytes = txt.as_bytes();
+        let mut p = Parser::new();
+        assert_ok!(p.read(&mut bytes));
     }
     #[test]
     fn read_property_ok() {
