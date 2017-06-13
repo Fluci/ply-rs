@@ -2,11 +2,31 @@ use std::io::{ Write, Result };
 use std::string::ToString;
 use ply::*;
 
-pub struct Writer {}
+pub enum NewLine {
+    N,
+    R,
+    RN
+}
+
+
+pub struct Writer {
+    /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
+    new_line: String,
+}
 
 impl Writer {
     pub fn new() -> Self {
-        Writer {}
+        Writer {
+            new_line: "\r\n".to_string(),
+        }
+    }
+
+    pub fn set_newline(&mut self, new_line: NewLine) {
+        self.new_line = match new_line {
+            NewLine::R => "\r".to_string(),
+            NewLine::N => "\n".to_string(),
+            NewLine::RN => "\r\n".to_string(),
+        };
     }
     // TODO: think about masking and valid/invalid symbols
     // TODO: make consistency check
@@ -165,7 +185,7 @@ impl Writer {
     }
 
     fn write_new_line<T: Write>(&self, out: &mut T) -> Result<usize> {
-        out.write("\r\n".as_bytes())
+        out.write(self.new_line.as_bytes())
     }
     fn write_simple_value<T: Write, V: ToString>(&self, value: &V, out: &mut T) -> Result<usize> {
         out.write(value.to_string().as_bytes())
