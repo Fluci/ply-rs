@@ -68,26 +68,27 @@ impl Display for Encoding {
     }
 }
 
+/// P: Payload element
 #[derive(Debug, PartialEq, Clone)]
-pub struct Element {
+pub struct Element<P> {
     pub name: String,
     pub count: u64,
     pub properties: ItemMap<Property>,
-    pub payload: Payload,
+    pub payload: Vec<P>,
 }
 
-impl Element {
+impl<P> Element<P> {
     pub fn new(name: String, count: u64) -> Self {
         Element {
             name: name,
             count: count,
             properties: ItemMap::new(),
-            payload: Payload::new(),
+            payload: Vec::new(),
         }
     }
 }
 
-impl Key for Element {
+impl<P> Key for Element<P> {
     fn get_key(&self) -> String {
         self.name.clone()
     }
@@ -141,15 +142,15 @@ pub enum DataItem {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Ply {
+pub struct Ply<P> {
     pub encoding: Encoding,
     pub version: Version,
     pub obj_infos: Vec<ObjInfo>,
-    pub elements: ItemMap<Element>,
+    pub elements: ItemMap<Element<P>>,
     pub comments: Vec<Comment>,
 }
 
-impl Ply {
+impl<P> Ply<P> {
     pub fn new() -> Self {
         Ply {
             encoding: Encoding::Ascii,

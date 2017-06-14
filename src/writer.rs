@@ -9,15 +9,30 @@ pub enum NewLine {
 }
 
 
-pub struct Writer {
-    /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
-    new_line: String,
+trait PropertyBuilder<P> {
+    fn build_property_from_element(&self, props_def: &ItemMap<Property>, props_data: P) -> Result<ItemMap<DataItem>>;
 }
 
-impl Writer {
+pub struct PBuilder {}
+
+impl PropertyBuilder<ItemMap<DataItem>> for PBuilder {
+    // simple identity
+    fn build_property_from_element(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<ItemMap<DataItem>> {
+        props_data
+    }
+}
+
+pub struct Writer<P> {
+    /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
+    new_line: String,
+    pub property_builder: PropertyBuilder<P>,
+}
+
+impl<P> Writer<P> {
     pub fn new() -> Self {
         Writer {
             new_line: "\r\n".to_string(),
+            property_builder: PBuilder{}
         }
     }
 
@@ -30,7 +45,7 @@ impl Writer {
     }
     // TODO: think about masking and valid/invalid symbols
     // TODO: make consistency check
-    pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply) -> Result<usize> {
+    pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply<P>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_header(out, &ply));
         written += try!(self.write_payload(out, &ply));
@@ -63,7 +78,7 @@ impl Writer {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_line_element_decl<T: Write>(&self, out: &mut T, element: &Element) -> Result<usize> {
+    pub fn write_line_element_decl<T: Write>(&self, out: &mut T, element: &Element<P>) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(format!("element {} {}", element.name, element.count).as_bytes()));
         written += try!(self.write_new_line(out));
@@ -78,7 +93,7 @@ impl Writer {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_element_decl<T: Write>(&self, out: &mut T, element: &Element) -> Result<usize> {
+    pub fn write_element_decl<T: Write>(&self, out: &mut T, element: &Element<P>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_element_decl(out, element));
         for (_, p) in &element.properties {
@@ -92,7 +107,7 @@ impl Writer {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Ply) -> Result<usize> {
+    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Ply<P>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_magic_number(out));
         written += try!(self.write_line_format(out, &header.encoding, &header.version));
@@ -108,11 +123,12 @@ impl Writer {
         written += try!(self.write_line_end_header(out));
         Ok(written)
     }
-    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Ply) -> Result<usize> {
+    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Ply<P>) -> Result<usize> {
         let mut written = 0;
-        for (_, elements) in &payload.elements {
-            for e in &elements.payload {
-                written += try!(self.write_line_payload_element(out, e));
+        for (_, element) in &payload.elements {
+            for e in &element.payload {
+                let prop = self.property_builder.build_property_from_element(&element.properties, e);
+                written += try!(self.write_line_payload_element(out, prop));
             }
         }
         Ok(written)
@@ -135,7 +151,7 @@ impl Writer {
         Ok(written)
     }
 }
-impl Writer {
+impl<P> Writer<P> {
     fn write_encoding<T: Write>(&self, out: &mut T, encoding: &Encoding) -> Result<usize> {
         let s = match *encoding {
             Encoding::Ascii => "ascii",
