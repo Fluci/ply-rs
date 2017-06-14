@@ -29,46 +29,46 @@ fn read_write_ply(ply: &Ply) -> Ply {
 }
 
 fn create_min() -> Ply {
-    Ply::new(Header::new(Encoding::Ascii))
+    Ply::new()
 }
 
 fn create_basic_header() -> Ply {
-    let mut ply = Ply::new(Header::new(Encoding::Ascii));
+    let mut ply = Ply::new();
     let p = Property::new("x".to_string(), DataType::Int);
     let mut e = Element::new("point".to_string(), 0);
     e.properties.add(p);
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
-    ply.header.elements.add(e);
-    ply.header.comments.push(c);
-    ply.header.obj_infos.push(oi);
+    ply.elements.add(e);
+    ply.comments.push(c);
+    ply.obj_infos.push(oi);
     ply
 }
 
 fn create_single_elements() -> Ply {
-    let mut ply = Ply::new(Header::new(Encoding::Ascii));
+    let mut ply = Ply::new();
 
     let mut e = Element::new("point".to_string(), 2);
     let p = Property::new("x".to_string(), DataType::Int);
     e.properties.add(p);
     let p = Property::new("y".to_string(), DataType::UInt);
     e.properties.add(p);
+
+    let mut pe = PayloadElement::new();
+    pe.insert("x".to_string(), DataItem::Int(-7));
+    pe.insert("y".to_string(), DataItem::UInt(5));
+    e.payload.push(pe);
+    let mut pe = PayloadElement::new();
+    pe.insert("x".to_string(), DataItem::Int(2));
+    pe.insert("y".to_string(), DataItem::UInt(4));
+    e.payload.push(pe);
+
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
-    ply.header.elements.add(e);
-    ply.header.comments.push(c);
-    ply.header.obj_infos.push(oi);
+    ply.elements.add(e);
+    ply.comments.push(c);
+    ply.obj_infos.push(oi);
 
-    let mut v = Vec::new();
-    let mut e = PayloadElement::new();
-    e.insert("x".to_string(), DataItem::Int(-7));
-    e.insert("y".to_string(), DataItem::UInt(5));
-    v.push(e);
-    let mut e = PayloadElement::new();
-    e.insert("x".to_string(), DataItem::Int(2));
-    e.insert("y".to_string(), DataItem::UInt(4));
-    v.push(e);
-    ply.payload.insert("point".to_string(), v);
     ply
 }
 
@@ -76,19 +76,17 @@ fn create_single_elements() -> Ply {
 fn write_header_min() {
     let ply = create_min();
     let new_ply = read_write_ply(&ply);
-    assert_eq!(ply.header, new_ply.header);
-    assert_eq!(ply.payload, new_ply.payload);
+    assert_eq!(ply, new_ply);
 }
 #[test]
 fn write_basic_header() {
     let ply = create_basic_header();
     let new_ply = read_write_ply(&ply);
-    assert_eq!(ply.header, new_ply.header);
+    assert_eq!(ply, new_ply);
 }
 #[test]
 fn write_single_elements() {
     let ply = create_single_elements();
     let new_ply = read_write_ply(&ply);
-    assert_eq!(ply.header, new_ply.header);
-    assert_eq!(ply.payload, new_ply.payload);
+    assert_eq!(ply, new_ply);
 }

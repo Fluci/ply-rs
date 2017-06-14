@@ -32,8 +32,8 @@ impl Writer {
     // TODO: make consistency check
     pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply) -> Result<usize> {
         let mut written = 0;
-        written += try!(self.write_header(out, &ply.header));
-        written += try!(self.write_payload(out, &ply.payload));
+        written += try!(self.write_header(out, &ply));
+        written += try!(self.write_payload(out, &ply));
         out.flush().unwrap();
         Ok(written)
     }
@@ -92,7 +92,7 @@ impl Writer {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Header) -> Result<usize> {
+    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Ply) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_magic_number(out));
         written += try!(self.write_line_format(out, &header.encoding, &header.version));
@@ -108,10 +108,10 @@ impl Writer {
         written += try!(self.write_line_end_header(out));
         Ok(written)
     }
-    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Payload) -> Result<usize> {
+    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Ply) -> Result<usize> {
         let mut written = 0;
-        for (_, elems) in payload {
-            for e in elems {
+        for (_, elements) in &payload.elements {
+            for e in &elements.payload {
                 written += try!(self.write_line_payload_element(out, e));
             }
         }

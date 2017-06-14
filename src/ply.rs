@@ -35,7 +35,7 @@ pub type Comment = String;
 /// one line in the payload section is an element
 pub type PayloadElement = ItemMap<DataItem>;
 /// The part after `end_header`.
-pub type Payload = ItemMap<Vec<PayloadElement>>;
+pub type Payload = Vec<PayloadElement>;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
@@ -68,11 +68,12 @@ impl Display for Encoding {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Element {
     pub name: String,
     pub count: u64,
-    pub properties: ItemMap<Property>
+    pub properties: ItemMap<Property>,
+    pub payload: Payload,
 }
 
 impl Element {
@@ -80,7 +81,8 @@ impl Element {
         Element {
             name: name,
             count: count,
-            properties: ItemMap::new()
+            properties: ItemMap::new(),
+            payload: Payload::new(),
         }
     }
 }
@@ -139,7 +141,7 @@ pub enum DataItem {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Header {
+pub struct Ply {
     pub encoding: Encoding,
     pub version: Version,
     pub obj_infos: Vec<ObjInfo>,
@@ -147,29 +149,14 @@ pub struct Header {
     pub comments: Vec<Comment>,
 }
 
-impl Header {
-    pub fn new(encoding: Encoding) -> Self {
-        Header {
-            encoding: encoding,
+impl Ply {
+    pub fn new() -> Self {
+        Ply {
+            encoding: Encoding::Ascii,
             version: Version{major: 1, minor: 0},
             obj_infos: Vec::new(),
             elements: ItemMap::new(),
             comments: Vec::new()
-        }
-    }
-}
-// TODO: PartialEq? be careful with consistency between payload and header.elements!
-#[derive(Debug, Clone)]
-pub struct Ply {
-    pub header: Header,
-    pub payload: Payload,
-}
-
-impl Ply {
-    pub fn new(header: Header) -> Self {
-        Ply {
-            header: header,
-            payload: Payload::new(),
         }
     }
 }
