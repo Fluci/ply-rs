@@ -11,14 +11,14 @@ fn read_file(path: &str) -> ply::Ply {
 
 #[test]
 fn read_empty() {
-    let ply = read_file("tests/plys/empty_ok_ascii.ply");
+    let ply = read_file("example_plys/empty_ok_ascii.ply");
     assert_eq!(ply.elements["face"].count, 0);
     assert!(ply.elements["vertex"].payload.is_empty());
     assert!(ply.elements["face"].payload.is_empty());
 }
 #[test]
 fn read_house() {
-    let ply = read_file("tests/plys/house_ok_ascii.ply");
+    let ply = read_file("example_plys/house_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
     assert_eq!(ply.elements["face"].count, 3);
     assert_eq!(ply.elements["vertex"].payload.len(), 5);
@@ -26,11 +26,11 @@ fn read_house() {
 }
 #[test]
 fn read_greg_turk_1() {
-    let ply = read_file("tests/plys/greg_turk_example1_ok_ascii.ply");
+    let ply = read_file("example_plys/greg_turk_example1_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
 }
 #[test]
 fn read_greg_turk_2() {
-    let ply = read_file("tests/plys/greg_turk_example2_ok_ascii.ply");
+    let ply = read_file("example_plys/greg_turk_example2_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
 }

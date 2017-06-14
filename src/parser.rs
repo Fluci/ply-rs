@@ -71,9 +71,9 @@ impl Parser {
             )),
         }
     }
-    pub fn read_payload<T: BufRead>(&self, reader: &mut T, ply: &mut Ply) -> Result<()> {
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element: &mut Element) -> Result<Vec<ItemMap<DataItem>>> {
         let mut location = LocationTracker::new();
-        self.__read_payload(reader, &mut location, ply)
+        self.__read_payload_for_element(reader, &mut location, element)
     }
     pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
         self.__read_element_line(line, props)
@@ -174,12 +174,12 @@ impl Parser {
             e => return Err(Error::new(ErrorKind::Other, format!("Encoding '{}' not implemented.", e))),
         };
         for (_, ref mut e) in &mut header.elements {
-            let elems = try!(self.__read_payload_n(reader, location, &e));
+            let elems = try!(self.__read_payload_for_element(reader, location, &e));
             e.payload = elems;
         }
         Ok(())
     }
-    fn __read_payload_n<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &Element) -> Result<Vec<ItemMap<DataItem>>> {
+    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &Element) -> Result<Vec<ItemMap<DataItem>>> {
         let mut elems = Vec::<ItemMap<DataItem>>::new();
         let mut line_str = String::new();
         for _ in 0..e.count {

@@ -9,3 +9,9 @@ linked-hash-map = "0.4.2"
 
 [build-dependencies]
 peg = "0.5.3"
+
+[[example]]
+name = "read_ply"
+
+[[example]]
+name = "read_ply_header_only"
