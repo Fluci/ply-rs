@@ -45,7 +45,7 @@ fn parse_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> 
     ))
 }
 
-trait ElementBuilder<P> {
+pub trait ElementBuilder<P> {
     fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
 }
 
@@ -53,12 +53,10 @@ struct EBuilder {}
 
 impl ElementBuilder<ItemMap<DataItem>> for EBuilder {
     // simple identity
-    fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<ItemMap<DataItem>> {
+    fn build_element_from_properties(&self, _props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<ItemMap<DataItem>> {
         Ok(props_data)
     }
 }
-
-type DefaultElementType = ItemMap<DataItem>;
 
 pub struct Parser<P> {
     pub element_builder: Box<ElementBuilder<P>>,
@@ -418,7 +416,7 @@ mod tests {
     fn element_ok() {
         assert_ok!(
             g::element("element vertex 8"),
-            Element::new("vertex".to_string(), 8)
+            ElementHeader::new("vertex".to_string(), 8)
         );
     }
     #[test]

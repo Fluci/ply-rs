@@ -8,9 +8,6 @@ pub enum NewLine {
     RN
 }
 
-type DefaultElementType = ItemMap<DataItem>;
-
-
 pub trait PropertyBuilder<P> {
     fn build_property_from_element(&self, props_def: &ItemMap<Property>, props_data: &P) -> Result<ItemMap<DataItem>>;
 }

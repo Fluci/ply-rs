@@ -1,7 +1,9 @@
 extern crate ply_rs;
 use ply_rs::*;
 
-fn read_file(path: &str) -> ply::Ply {
+type Ply = ply::Ply<ply::DefaultElementType>;
+
+fn read_file(path: &str) -> Ply {
     let mut f = std::fs::File::open(path).unwrap();
     let p = parser::Parser::new();
     let ply = p.read_ply(&mut f);
@@ -12,7 +14,7 @@ fn read_file(path: &str) -> ply::Ply {
 #[test]
 fn read_empty() {
     let ply = read_file("example_plys/empty_ok_ascii.ply");
-    assert_eq!(ply.elements["face"].count, 0);
+    assert_eq!(ply.elements["face"].header.count, 0);
     assert!(ply.elements["vertex"].payload.is_empty());
     assert!(ply.elements["face"].payload.is_empty());
 }
@@ -20,7 +22,7 @@ fn read_empty() {
 fn read_house() {
     let ply = read_file("example_plys/house_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
-    assert_eq!(ply.elements["face"].count, 3);
+    assert_eq!(ply.elements["face"].header.count, 3);
     assert_eq!(ply.elements["vertex"].payload.len(), 5);
     assert_eq!(ply.elements["face"].payload.len(), 3);
 }

@@ -3,7 +3,9 @@ use ply_rs::*;
 use ply_rs::ply::*;
 use std::io::{ Read, BufReader };
 
-fn read_buff<T: Read>(mut buf: &mut T) -> ply::Ply {
+type Ply = ply::Ply<ply::DefaultElementType>;
+
+fn read_buff<T: Read>(mut buf: &mut T) -> Ply {
     let p = parser::Parser::new();
     let ply = p.read_ply(&mut buf);
     assert!(ply.is_ok(), format!("failed: {}", ply.err().unwrap()));
@@ -35,8 +37,8 @@ fn create_min() -> Ply {
 fn create_basic_header() -> Ply {
     let mut ply = Ply::new();
     let p = Property::new("x".to_string(), DataType::Int);
-    let mut e = Element::new("point".to_string(), 0);
-    e.properties.add(p);
+    let mut e = Element::new(ElementHeader::new("point".to_string(), 0));
+    e.header.properties.add(p);
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
     ply.elements.add(e);
@@ -48,11 +50,11 @@ fn create_basic_header() -> Ply {
 fn create_single_elements() -> Ply {
     let mut ply = Ply::new();
 
-    let mut e = Element::new("point".to_string(), 2);
+    let mut e = Element::new(ElementHeader::new("point".to_string(), 2));
     let p = Property::new("x".to_string(), DataType::Int);
-    e.properties.add(p);
+    e.header.properties.add(p);
     let p = Property::new("y".to_string(), DataType::UInt);
-    e.properties.add(p);
+    e.header.properties.add(p);
 
     let mut pe = PayloadElement::new();
     pe.insert("x".to_string(), DataItem::Int(-7));

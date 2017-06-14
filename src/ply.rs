@@ -34,6 +34,7 @@ pub type ObjInfo = String;
 pub type Comment = String;
 /// one line in the payload section is an element
 pub type PayloadElement = ItemMap<DataItem>;
+pub type DefaultElementType = ItemMap<DataItem>;
 /// The part after `end_header`.
 pub type Payload = Vec<PayloadElement>;
 
