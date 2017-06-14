@@ -45,6 +45,16 @@ fn parse_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> 
     ))
 }
 
+pub trait FromItem<P> {
+    fn from_item(props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
+}
+
+impl FromItem<DefaultElementType> for DefaultElementType {
+    fn from_item(_props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<DefaultElementType> {
+        Ok(props_data)
+    }
+}
+
 pub trait ElementBuilder<P> {
     fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
 }
@@ -57,24 +67,19 @@ impl ElementBuilder<ItemMap<DataItem>> for EBuilder {
         Ok(props_data)
     }
 }
-
-pub struct Parser<P> {
-    pub element_builder: Box<ElementBuilder<P>>,
+use std::marker::PhantomData;
+pub struct Parser<P: FromItem<P>> {
+      phantom: PhantomData<P>,
 }
+
 impl Parser<DefaultElementType> {
     pub fn new() -> Self {
         Parser {
-            element_builder: Box::new(EBuilder{}),
+            phantom: PhantomData
         }
     }
 }
-impl<P> Parser<P> {
-    pub fn from_element_builder(element_builder: Box<ElementBuilder<P>>) -> Self {
-         Parser {
-             element_builder: element_builder,
-         }
-     }
-
+impl<P: FromItem<P>> Parser<P> {
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<P>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
@@ -233,7 +238,7 @@ impl<P> Parser<P> {
             let new_p : DataItem = try!(self.read_properties(&mut elem_it, &p.data_type));
             vals.insert(k.clone(), new_p);
         }
-        self.element_builder.build_element_from_properties(props, vals)
+        P::from_item(props, vals)
     }
     fn parse<T: FromStr>(&self, s: &str) -> Result<T>
     where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {

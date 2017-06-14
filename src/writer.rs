@@ -8,6 +8,17 @@ pub enum NewLine {
     RN
 }
 
+pub trait ToItem<P> {
+    fn to_item(&self, props_def: &ItemMap<Property>) -> Result<DefaultElementType>;
+}
+
+impl ToItem<DefaultElementType> for DefaultElementType {
+    // simple identity
+    fn to_item(&self, _props_def: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+        Ok(self.clone())
+    }
+}
+
 pub trait PropertyBuilder<P> {
     fn build_property_from_element(&self, props_def: &ItemMap<Property>, props_data: &P) -> Result<ItemMap<DataItem>>;
 }
@@ -22,11 +33,13 @@ impl PropertyBuilder<ItemMap<DataItem>> for PBuilder {
 }
 
 
-pub struct Writer<P> {
+use std::marker::PhantomData;
+pub struct Writer<P: ToItem<P>> {
     /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
     new_line: String,
-    pub property_builder: Box<PropertyBuilder<P>>,
+    phantom: PhantomData<P>,
 }
+/*
 impl Writer<DefaultElementType> {
     pub fn new() -> Self {
         Writer {
@@ -34,14 +47,14 @@ impl Writer<DefaultElementType> {
             property_builder: Box::new(PBuilder{})
         }
     }
-}
-impl<P> Writer<P> {
-    pub fn from_property_builder(property_builder: Box<PropertyBuilder<P>>) -> Self {
-         Writer {
-             new_line: "\r\n".to_string(),
-             property_builder: property_builder,
-         }
-     }
+}*/
+impl<P: ToItem<P>> Writer<P> {
+    pub fn new() -> Self {
+        Writer {
+            new_line: "\r\n".to_string(),
+            phantom: PhantomData,
+        }
+    }
     pub fn set_newline(&mut self, new_line: NewLine) {
         self.new_line = match new_line {
             NewLine::R => "\r".to_string(),
@@ -133,7 +146,7 @@ impl<P> Writer<P> {
         let mut written = 0;
         for (_, element) in &payload.elements {
             for e in &element.payload {
-                let prop = try!(self.property_builder.build_property_from_element(&element.header.properties, e));
+                let prop = try!(e.to_item(&element.header.properties));
                 written += try!(self.write_line_payload_element(out, &prop));
             }
         }
@@ -156,8 +169,7 @@ impl<P> Writer<P> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-}
-impl<P> Writer<P> {
+
     fn write_encoding<T: Write>(&self, out: &mut T, encoding: &Encoding) -> Result<usize> {
         let s = match *encoding {
             Encoding::Ascii => "ascii",
