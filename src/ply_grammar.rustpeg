@@ -60,9 +60,9 @@ pub comment -> Comment
 pub obj_info -> ObjInfo
 	= "obj_info" space c:text { c.to_string() }
 
-pub element -> Element
+pub element -> ElementHeader
 	= "element" space id:$(ident) space n:uint {
-		Element::new(id.to_string(), n)
+		ElementHeader::new(id.to_string(), n)
 	}
 
 pub property -> Property

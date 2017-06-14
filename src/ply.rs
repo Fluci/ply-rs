@@ -68,21 +68,32 @@ impl Display for Encoding {
     }
 }
 
-/// P: Payload element
-#[derive(Debug, PartialEq, Clone)]
-pub struct Element<P> {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ElementHeader {
     pub name: String,
     pub count: u64,
     pub properties: ItemMap<Property>,
+}
+impl ElementHeader {
+    pub fn new(name: String, count: u64) -> Self {
+        ElementHeader {
+            name: name,
+            count: count,
+            properties: ItemMap::new(),
+        }
+    }
+}
+/// P: Payload element
+#[derive(Debug, PartialEq, Clone)]
+pub struct Element<P> {
+    pub header: ElementHeader,
     pub payload: Vec<P>,
 }
 
 impl<P> Element<P> {
-    pub fn new(name: String, count: u64) -> Self {
+    pub fn new(header: ElementHeader) -> Self {
         Element {
-            name: name,
-            count: count,
-            properties: ItemMap::new(),
+            header: header,
             payload: Vec::new(),
         }
     }
@@ -90,7 +101,7 @@ impl<P> Element<P> {
 
 impl<P> Key for Element<P> {
     fn get_key(&self) -> String {
-        self.name.clone()
+        self.header.name.clone()
     }
 }
 

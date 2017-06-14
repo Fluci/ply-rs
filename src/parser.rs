@@ -9,12 +9,12 @@ use ply::*;
 use util::LocationTracker;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Line<P> {
+pub enum Line {
     MagicNumber,
     Format((Encoding, Version)),
     Comment(Comment),
     ObjInfo(ObjInfo),
-    Element(Element<P>),
+    Element(ElementHeader),
     Property(Property),
     EndHeader
 }
@@ -49,25 +49,34 @@ trait ElementBuilder<P> {
     fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
 }
 
-pub struct EBuilder {}
+struct EBuilder {}
 
 impl ElementBuilder<ItemMap<DataItem>> for EBuilder {
     // simple identity
     fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<ItemMap<DataItem>> {
-        props_data
+        Ok(props_data)
     }
 }
+
+type DefaultElementType = ItemMap<DataItem>;
 
 pub struct Parser<P> {
-    pub element_builder: ElementBuilder<P>,
+    pub element_builder: Box<ElementBuilder<P>>,
 }
-
-impl<P> Parser<P> {
+impl Parser<DefaultElementType> {
     pub fn new() -> Self {
         Parser {
-            element_builder: EBuilder{},
+            element_builder: Box::new(EBuilder{}),
         }
     }
+}
+impl<P> Parser<P> {
+    pub fn from_element_builder(element_builder: Box<ElementBuilder<P>>) -> Self {
+         Parser {
+             element_builder: element_builder,
+         }
+     }
+
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<P>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
@@ -79,7 +88,7 @@ impl<P> Parser<P> {
         let mut line = LocationTracker::new();
         self.__read_header(reader, &mut line)
     }
-    pub fn read_header_line(&self, line: &str) -> Result<Line<P>> {
+    pub fn read_header_line(&self, line: &str) -> Result<Line> {
         match self.__read_header_line(line) {
             Ok(l) => Ok(l),
             Err(e) => Err(Error::new(
@@ -88,17 +97,16 @@ impl<P> Parser<P> {
             )),
         }
     }
-    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element: &mut Element<P>) -> Result<Vec<ItemMap<DataItem>>> {
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_header: &ElementHeader) -> Result<Vec<P>> {
         let mut location = LocationTracker::new();
-        self.__read_payload_for_element(reader, &mut location, element)
+        self.__read_payload_for_element(reader, &mut location, element_header)
     }
-    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<P> {
         self.__read_element_line(line, props)
     }
-}
 
-impl<P> Parser<P> {
-    fn __read_header_line(&self, line_str: &str) -> result::Result<Line<P>, grammar::ParseError> {
+    // private
+    fn __read_header_line(&self, line_str: &str) -> result::Result<Line, grammar::ParseError> {
         grammar::line(line_str)
     }
     fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Ply<P>> {
@@ -114,7 +122,7 @@ impl<P> Parser<P> {
 
         let mut header_form_ver : Option<(Encoding, Version)> = None;
         let mut header_obj_infos = Vec::<ObjInfo>::new();
-        let mut header_elements = ItemMap::<Element>::new();
+        let mut header_elements = ItemMap::<Element<P>>::new();
         let mut header_comments = Vec::<Comment>::new();
         location.next_line();
         'readlines: loop {
@@ -151,7 +159,7 @@ impl<P> Parser<P> {
                     header_comments.push(c.clone())
                 ),
                 Ok(Line::Element(ref e)) => {
-                    header_elements.add(e.clone())
+                    header_elements.add(Element::new(e.clone()))
                 },
                 Ok(Line::Property(p)) => (
                     if header_elements.is_empty() {
@@ -162,7 +170,7 @@ impl<P> Parser<P> {
                         );
                     } else {
                         let (_, mut e) = header_elements.pop_back().unwrap();
-                        e.properties.add(p);
+                        e.header.properties.add(p);
                         header_elements.add(e);
                     }
                 ),
@@ -191,12 +199,12 @@ impl<P> Parser<P> {
             e => return Err(Error::new(ErrorKind::Other, format!("Encoding '{}' not implemented.", e))),
         };
         for (_, ref mut e) in &mut header.elements {
-            let elems = try!(self.__read_payload_for_element(reader, location, &e));
+            let elems = try!(self.__read_payload_for_element(reader, location, &e.header));
             e.payload = elems;
         }
         Ok(())
     }
-    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &Element<P>) -> Result<Vec<P>> {
+    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &ElementHeader) -> Result<Vec<P>> {
         let mut elems = Vec::<P>::new();
         let mut line_str = String::new();
         for _ in 0..e.count {
