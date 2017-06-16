@@ -1,5 +1,5 @@
 extern crate linked_hash_map;
-
+extern crate byteorder;
 mod test_grammar {
     include!(concat!(env!("OUT_DIR"), "/ply_grammar.rs"));
 }

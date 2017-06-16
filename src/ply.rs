@@ -142,7 +142,8 @@ pub enum PropertyType {
     UInt,
     Float,
     Double,
-    List(Box<PropertyType>)
+    /// Index type (important for binary), Element type
+    List(Box<PropertyType>, Box<PropertyType>)
 }
 
 /// one line in the payload section is an element

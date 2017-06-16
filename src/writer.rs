@@ -1,4 +1,4 @@
-use std::io::{ Write, Result };
+use std::io::{ Write, Result, Error, ErrorKind };
 use std::string::ToString;
 use ply::*;
 
@@ -141,8 +141,16 @@ impl<P: ToElement<P>> Writer<P> {
             PropertyType::UInt => out.write("uint".as_bytes()),
             PropertyType::Float => out.write("float".as_bytes()),
             PropertyType::Double => out.write("double".as_bytes()),
-            PropertyType::List(ref t) => {
-                let mut written = try!(out.write("list uchar ".as_bytes()));
+            PropertyType::List(ref index_type, ref t) => {
+                let mut written = try!(out.write("list ".as_bytes()));
+                match **index_type {
+                    PropertyType::Float => return Err(Error::new(ErrorKind::InvalidInput, "List index can not be of type float.")),
+                    PropertyType::Double => return Err(Error::new(ErrorKind::InvalidInput, "List index can not be of type double.")),
+                    PropertyType::List(_, _) => return Err(Error::new(ErrorKind::InvalidInput, "List index can not be of type list.")),
+                    _ => (),
+                };
+                written += try!(self.write_property_type(out, index_type));
+                written += try!(out.write(" ".as_bytes()));
                 written += try!(self.write_property_type(out, t));
                 Ok(written)
             }

@@ -6,6 +6,7 @@ build = "build.rs"
 
 [dependencies]
 linked-hash-map = "0.4.2"
+byteorder = "1.0.0"
 
 [build-dependencies]
 peg = "0.5.3"

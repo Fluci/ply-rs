@@ -29,8 +29,8 @@ data_type -> PropertyType
 	/ "uint"   { PropertyType::UInt }
 	/ "float"  { PropertyType::Float }
 	/ "double" { PropertyType::Double }
-	/ "list" space "uchar" space t:data_type {
-		PropertyType::List(Box::new(t))
+	/ "list" space it:data_type space t:data_type {
+		PropertyType::List(Box::new(it), Box::new(t))
 	}
 
 pub magic_number

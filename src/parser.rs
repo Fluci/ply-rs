@@ -4,6 +4,9 @@ use std::fmt::Debug;
 use std::slice::Iter;
 use std::str::FromStr;
 use std::result;
+
+use byteorder::{ BigEndian, LittleEndian, ReadBytesExt, ByteOrder };
+
 use grammar;
 use ply::*;
 use util::LocationTracker;
@@ -32,13 +35,25 @@ macro_rules! is_line {
     );
 }
 
-fn parse_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
+fn parse_binary_rethrow<T, E: Debug>(location: &LocationTracker, e: E, message: &str) -> Result<T> {
+    Err(Error::new(
+        ErrorKind::InvalidInput,
+        format!("Line {}: {}\n\tError: {:?}", location.line_index, message, e)
+    ))
+}
+fn parse_binary_error<T>(location: &LocationTracker, message: &str) -> Result<T> {
+    Err(Error::new(
+        ErrorKind::InvalidInput,
+        format!("Line {}: {}", location.line_index, message)
+    ))
+}
+fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(Error::new(
         ErrorKind::InvalidInput,
         format!("Line {}: {}\n\tString: '{}'\n\tError: {:?}", location.line_index, message, line_str, e)
     ))
 }
-fn parse_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> Result<T> {
+fn parse_ascii_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> Result<T> {
     Err(Error::new(
         ErrorKind::InvalidInput,
         format!("Line {}: {}\n\tString: '{}'", location.line_index, message, line_str)
@@ -91,12 +106,27 @@ impl<P: FromElement<P>> Parser<P> {
             )),
         }
     }
-    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<P>> {
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<P>> {
         let mut location = LocationTracker::new();
-        self.__read_payload_for_element(reader, &mut location, element_def)
+        match header.encoding {
+            Encoding::Ascii => self.__read_ascii_payload_for_element(reader, &mut location, element_def),
+            Encoding::BinaryBigEndian => self.__read_binary_payload_for_element::<T, BigEndian>(reader, &mut location, element_def),
+            Encoding::BinaryLittleEndian => self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def),
+        }
     }
-    pub fn read_element_line(&self, line: &str, element_def: &ElementDef) -> Result<P> {
-        self.__read_element_line(line, element_def)
+    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
+        /// Reduce coupling with ByteOrder
+        let element = try!(self.__read_binary_element::<T, BigEndian>(reader, element_def));
+        P::from_element(element_def, element)
+    }
+    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
+        /// Reduce coupling with ByteOrder
+        let element = try!(self.__read_binary_element::<T, LittleEndian>(reader, element_def));
+        P::from_element(element_def, element)
+    }
+    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<P> {
+        let element = try!(self.__read_ascii_element(line, element_def));
+        P::from_element(element_def, element)
     }
 
     // private
@@ -109,8 +139,8 @@ impl<P: FromElement<P>> Parser<P> {
         try!(reader.read_line(&mut line_str));
         match self.__read_header_line(&line_str) {
             Ok(Line::MagicNumber) => (),
-            Ok(l) => return parse_error(location, &line_str, &format!("Expected magic number 'ply', but saw '{:?}'.", l)),
-            Err(e) => return parse_rethrow(location, &line_str, e, "Expected magic number 'ply'.")
+            Ok(l) => return parse_ascii_error(location, &line_str, &format!("Expected magic number 'ply', but saw '{:?}'.", l)),
+            Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Expected magic number 'ply'.")
         }
         is_line!(grammar::line(&line_str), Line::MagicNumber);
 
@@ -125,15 +155,15 @@ impl<P: FromElement<P>> Parser<P> {
             let line = self.__read_header_line(&line_str);
 
             match line {
-                Err(e) => return parse_rethrow(location, &line_str, e, "Couldn't parse line."),
-                Ok(Line::MagicNumber) => return parse_error(location, &line_str, "Unexpected 'ply' found."),
+                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couldn't parse line."),
+                Ok(Line::MagicNumber) => return parse_ascii_error(location, &line_str, "Unexpected 'ply' found."),
                 Ok(Line::Format(ref t)) => (
                     if header_form_ver.is_none() {
                         header_form_ver = Some(t.clone());
                     } else {
                         let f = header_form_ver.unwrap();
                         if f != *t {
-                            return parse_error(
+                            return parse_ascii_error(
                                 location,
                                 &line_str,
                                 &format!(
@@ -157,7 +187,7 @@ impl<P: FromElement<P>> Parser<P> {
                 },
                 Ok(Line::Property(p)) => (
                     if header_elements.is_empty() {
-                        return parse_error(
+                        return parse_ascii_error(
                             location,
                             &line_str,
                             &format!("Property '{:?}' found without preceding element.", p)
@@ -187,36 +217,46 @@ impl<P: FromElement<P>> Parser<P> {
             elements: header_elements
         })
     }
+    /// internal dispatcher based on the encoding
     fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<P>> {
-        match header.encoding {
-            Encoding::Ascii => (),
-            e => return Err(Error::new(ErrorKind::Other, format!("Encoding '{}' not implemented.", e))),
-        };
-
         let mut payload = Payload::new();
-        for (k, ref e) in &header.elements {
-            let elems = try!(self.__read_payload_for_element(reader, location, e));
-            payload.insert(k.clone(), elems);
+        match header.encoding {
+            Encoding::Ascii => for (k, ref e) in &header.elements {
+                let elems = try!(self.__read_ascii_payload_for_element(reader, location, e));
+                payload.insert(k.clone(), elems);
+            },
+            Encoding::BinaryBigEndian => for (k, ref e) in &header.elements {
+                let elems = try!(self.__read_binary_payload_for_element::<T, BigEndian>(reader, location, e));
+                payload.insert(k.clone(), elems);
+            },
+            Encoding::BinaryLittleEndian => for (k, ref e) in &header.elements {
+                let elems = try!(self.__read_binary_payload_for_element::<T, LittleEndian>(reader, location, e));
+                payload.insert(k.clone(), elems);
+            }
         }
         Ok(payload)
     }
-    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &ElementDef) -> Result<Vec<P>> {
+    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
         let mut elems = Vec::<P>::new();
         let mut line_str = String::new();
-        for _ in 0..e.count {
+        for _ in 0..element_def.count {
             line_str.clear();
             try!(reader.read_line(&mut line_str));
 
-            let element = match self.__read_element_line(&line_str, e) {
+            let element = match self.__read_ascii_element(&line_str, element_def) {
                 Ok(e) => e,
-                Err(e) => return parse_rethrow(location, &line_str, e, "Couln't read element line.")
+                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couln't read element line.")
+            };
+            let element = match P::from_element(element_def, element) {
+                Ok(e) => e,
+                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couldn't convert element line.")
             };
             elems.push(element);
             location.next_line();
         }
         Ok(elems)
     }
-    fn __read_element_line(&self, line: &str, element_def: &ElementDef) -> Result<P> {
+    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<DefaultElement> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
             Err(ref e) => return Err(Error::new(
@@ -228,21 +268,12 @@ impl<P: FromElement<P>> Parser<P> {
         let mut elem_it : Iter<String> = elems.iter();
         let mut vals = DefaultElement::new();
         for (k, p) in &element_def.properties {
-            let new_p : Property = try!(self.read_properties(&mut elem_it, &p.data_type));
+            let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
             vals.insert(k.clone(), new_p);
         }
-        P::from_element(element_def, vals)
+        Ok(vals)
     }
-    fn parse<T: FromStr>(&self, s: &str) -> Result<T>
-    where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
-        let v = s.parse();
-        match v {
-            Ok(r) => Ok(r),
-            Err(e) => Err(Error::new(ErrorKind::InvalidInput,
-                format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
-        }
-    }
-    fn read_properties(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
+    fn __read_ascii_property(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
         let s : &String = match elem_iter.next() {
             None => return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -260,11 +291,73 @@ impl<P: FromElement<P>> Parser<P> {
             PropertyType::UInt => Property::UInt(try!(self.parse(s))),
             PropertyType::Float => Property::Float(try!(self.parse(s))),
             PropertyType::Double => Property::Double(try!(self.parse(s))),
-            PropertyType::List(ref property_type) => {
+            PropertyType::List(_, ref property_type) => {
                 let size : usize = try!(self.parse(s));
                 let mut v = Vec::<Property>::new();
                 for _ in 0..size {
-                    let property = try!(self.read_properties(elem_iter, &property_type));
+                    let property = try!(self.__read_ascii_property(elem_iter, &property_type));
+                    v.push(property);
+                }
+                Property::List(v)
+            }
+        };
+        Ok(result)
+    }
+    fn parse<T: FromStr>(&self, s: &str) -> Result<T>
+    where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+        let v = s.parse();
+        match v {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Error::new(ErrorKind::InvalidInput,
+                format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
+        }
+    }
+    fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
+        let mut elems = Vec::<P>::new();
+        for _ in 0..element_def.count {
+            let raw_element = try!(self.__read_binary_element::<T, B>(reader, element_def));
+            let element = match P::from_element(element_def, raw_element) {
+                Ok(e) => e,
+                Err(e) => return parse_binary_rethrow(location, e, "Couldn't read binary property.")
+            };
+            elems.push(element);
+        }
+        Ok(elems) // Mock
+    }
+    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<DefaultElement> {
+        let mut raw_element = DefaultElement::new();
+
+        for (k, p) in &element_def.properties {
+            let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
+            raw_element.insert(k.clone(), property);
+        }
+        Ok(raw_element)
+    }
+    fn __read_binary_property<T: Read, B: ByteOrder>(&self, reader: &mut T, data_type: &PropertyType) -> Result<Property> {
+        let result = match *data_type {
+            PropertyType::Char => Property::Char(try!(reader.read_i8())),
+            PropertyType::UChar => Property::UChar(try!(reader.read_u8())),
+            PropertyType::Short => Property::Short(try!(reader.read_i16::<B>())),
+            PropertyType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
+            PropertyType::Int => Property::Int(try!(reader.read_i32::<B>())),
+            PropertyType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
+            PropertyType::Float => Property::Float(try!(reader.read_f32::<B>())),
+            PropertyType::Double => Property::Double(try!(reader.read_f64::<B>())),
+            PropertyType::List(ref index_type, ref property_type) => {
+                let size : usize = match **index_type {
+                    PropertyType::Char => try!(reader.read_i8()) as usize,
+                    PropertyType::UChar => try!(reader.read_u8()) as usize,
+                    PropertyType::Short => try!(reader.read_i16::<B>()) as usize,
+                    PropertyType::UShort => try!(reader.read_u16::<B>()) as usize,
+                    PropertyType::Int => try!(reader.read_i32::<B>()) as usize,
+                    PropertyType::UInt => try!(reader.read_u32::<B>()) as usize,
+                    PropertyType::Float => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in PropertyType.")),
+                    PropertyType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in PropertyType.")),
+                    PropertyType::List(_,_) => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, List declared in PropertyType.")),
+                };
+                let mut v = Vec::<Property>::new();
+                for _ in 0..size {
+                    let property = try!(self.__read_binary_property::<T, B>(reader, &property_type));
                     v.push(property);
                 }
                 Property::List(v)
@@ -359,7 +452,7 @@ mod tests {
         let mut elem_def = ElementDef::new("dummy".to_string(), 0);
         elem_def.properties = prop;
 
-        let properties = p.read_element_line(&txt, &elem_def);
+        let properties = p.read_ascii_element(&txt, &elem_def);
         assert!(properties.is_ok(), format!("error: {:?}", properties));
     }
     #[test]
@@ -434,7 +527,7 @@ mod tests {
     fn property_list_ok() {
         assert_ok!(
             g::property("property list uchar int c"),
-            PropertyDef::new("c".to_string(), PropertyType::List(Box::new(PropertyType::Int)))
+            PropertyDef::new("c".to_string(), PropertyType::List(Box::new(PropertyType::UChar), Box::new(PropertyType::Int)))
         );
     }
     #[test]
