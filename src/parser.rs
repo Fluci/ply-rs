@@ -14,8 +14,8 @@ pub enum Line {
     Format((Encoding, Version)),
     Comment(Comment),
     ObjInfo(ObjInfo),
-    Element(ElementHeader),
-    Property(Property),
+    Element(ElementDef),
+    Property(PropertyDef),
     EndHeader
 }
 
@@ -45,49 +45,40 @@ fn parse_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> 
     ))
 }
 
-pub trait FromItem<P> {
-    fn from_item(props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
+pub trait FromElement<P> {
+    fn from_element(props_def: &ElementDef, props_data: DefaultElement) -> Result<P>;
 }
 
-impl FromItem<DefaultElementType> for DefaultElementType {
-    fn from_item(_props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<DefaultElementType> {
+impl FromElement<DefaultElement> for DefaultElement {
+    fn from_element(_props_def: &ElementDef, props_data: DefaultElement) -> Result<DefaultElement> {
         Ok(props_data)
     }
 }
 
-pub trait ElementBuilder<P> {
-    fn build_element_from_properties(&self, props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<P>;
-}
-
-struct EBuilder {}
-
-impl ElementBuilder<ItemMap<DataItem>> for EBuilder {
-    // simple identity
-    fn build_element_from_properties(&self, _props_def: &ItemMap<Property>, props_data: ItemMap<DataItem>) -> Result<ItemMap<DataItem>> {
-        Ok(props_data)
-    }
-}
 use std::marker::PhantomData;
-pub struct Parser<P: FromItem<P>> {
-      phantom: PhantomData<P>,
+pub struct Parser<E: FromElement<E>> {
+      phantom: PhantomData<E>,
 }
 
-impl Parser<DefaultElementType> {
+impl Parser<DefaultElement> {
     pub fn new() -> Self {
         Parser {
             phantom: PhantomData
         }
     }
 }
-impl<P: FromItem<P>> Parser<P> {
+impl<P: FromElement<P>> Parser<P> {
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<P>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
-        let mut ply = try!(self.__read_header(&mut source, &mut location));
-        try!(self.__read_payload(&mut source, &mut location, &mut ply));
+        let header = try!(self.__read_header(&mut source, &mut location));
+        let payload = try!(self.__read_payload(&mut source, &mut location, &header));
+        let mut ply = Ply::new();
+        ply.header = header;
+        ply.payload = payload;
         Ok(ply)
     }
-    pub fn read_header<T: BufRead>(&self, reader: &mut T) -> Result<Ply<P>> {
+    pub fn read_header<T: BufRead>(&self, reader: &mut T) -> Result<Header> {
         let mut line = LocationTracker::new();
         self.__read_header(reader, &mut line)
     }
@@ -100,19 +91,19 @@ impl<P: FromItem<P>> Parser<P> {
             )),
         }
     }
-    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_header: &ElementHeader) -> Result<Vec<P>> {
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<P>> {
         let mut location = LocationTracker::new();
-        self.__read_payload_for_element(reader, &mut location, element_header)
+        self.__read_payload_for_element(reader, &mut location, element_def)
     }
-    pub fn read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<P> {
-        self.__read_element_line(line, props)
+    pub fn read_element_line(&self, line: &str, element_def: &ElementDef) -> Result<P> {
+        self.__read_element_line(line, element_def)
     }
 
     // private
     fn __read_header_line(&self, line_str: &str) -> result::Result<Line, grammar::ParseError> {
         grammar::line(line_str)
     }
-    fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Ply<P>> {
+    fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
         location.next_line();
         let mut line_str = String::new();
         try!(reader.read_line(&mut line_str));
@@ -125,7 +116,7 @@ impl<P: FromItem<P>> Parser<P> {
 
         let mut header_form_ver : Option<(Encoding, Version)> = None;
         let mut header_obj_infos = Vec::<ObjInfo>::new();
-        let mut header_elements = ItemMap::<Element<P>>::new();
+        let mut header_elements = KeyMap::<ElementDef>::new();
         let mut header_comments = Vec::<Comment>::new();
         location.next_line();
         'readlines: loop {
@@ -162,7 +153,7 @@ impl<P: FromItem<P>> Parser<P> {
                     header_comments.push(c.clone())
                 ),
                 Ok(Line::Element(ref e)) => {
-                    header_elements.add(Element::new(e.clone()))
+                    header_elements.add(e.clone())
                 },
                 Ok(Line::Property(p)) => (
                     if header_elements.is_empty() {
@@ -173,7 +164,7 @@ impl<P: FromItem<P>> Parser<P> {
                         );
                     } else {
                         let (_, mut e) = header_elements.pop_back().unwrap();
-                        e.header.properties.add(p);
+                        e.properties.add(p);
                         header_elements.add(e);
                     }
                 ),
@@ -188,7 +179,7 @@ impl<P: FromItem<P>> Parser<P> {
             ));
         }
         let (encoding, version) = header_form_ver.unwrap();
-        Ok(Ply{
+        Ok(Header{
             encoding: encoding,
             version: version,
             obj_infos: header_obj_infos,
@@ -196,25 +187,27 @@ impl<P: FromItem<P>> Parser<P> {
             elements: header_elements
         })
     }
-    fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &mut Ply<P>) -> Result<()> {
+    fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<P>> {
         match header.encoding {
             Encoding::Ascii => (),
             e => return Err(Error::new(ErrorKind::Other, format!("Encoding '{}' not implemented.", e))),
         };
-        for (_, ref mut e) in &mut header.elements {
-            let elems = try!(self.__read_payload_for_element(reader, location, &e.header));
-            e.payload = elems;
+
+        let mut payload = Payload::new();
+        for (k, ref e) in &header.elements {
+            let elems = try!(self.__read_payload_for_element(reader, location, e));
+            payload.insert(k.clone(), elems);
         }
-        Ok(())
+        Ok(payload)
     }
-    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &ElementHeader) -> Result<Vec<P>> {
+    fn __read_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, e: &ElementDef) -> Result<Vec<P>> {
         let mut elems = Vec::<P>::new();
         let mut line_str = String::new();
         for _ in 0..e.count {
             line_str.clear();
             try!(reader.read_line(&mut line_str));
 
-            let element = match self.__read_element_line(&line_str, &e.properties) {
+            let element = match self.__read_element_line(&line_str, e) {
                 Ok(e) => e,
                 Err(e) => return parse_rethrow(location, &line_str, e, "Couln't read element line.")
             };
@@ -223,7 +216,7 @@ impl<P: FromItem<P>> Parser<P> {
         }
         Ok(elems)
     }
-    fn __read_element_line(&self, line: &str, props: &ItemMap<Property>) -> Result<P> {
+    fn __read_element_line(&self, line: &str, element_def: &ElementDef) -> Result<P> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
             Err(ref e) => return Err(Error::new(
@@ -233,12 +226,12 @@ impl<P: FromItem<P>> Parser<P> {
         };
 
         let mut elem_it : Iter<String> = elems.iter();
-        let mut vals = ItemMap::<DataItem>::new();
-        for (k, p) in props {
-            let new_p : DataItem = try!(self.read_properties(&mut elem_it, &p.data_type));
+        let mut vals = DefaultElement::new();
+        for (k, p) in &element_def.properties {
+            let new_p : Property = try!(self.read_properties(&mut elem_it, &p.data_type));
             vals.insert(k.clone(), new_p);
         }
-        P::from_item(props, vals)
+        P::from_element(element_def, vals)
     }
     fn parse<T: FromStr>(&self, s: &str) -> Result<T>
     where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
@@ -249,7 +242,7 @@ impl<P: FromItem<P>> Parser<P> {
                 format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
         }
     }
-    fn read_properties(&self, elem_iter: &mut Iter<String>, data_type: &DataType) -> Result<DataItem> {
+    fn read_properties(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
         let s : &String = match elem_iter.next() {
             None => return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -257,29 +250,29 @@ impl<P: FromItem<P>> Parser<P> {
             )),
             Some(x) => x
         };
+
         let result = match *data_type {
-            DataType::Char => DataItem::Char(try!(self.parse(s))),
-            DataType::UChar => DataItem::UChar(try!(self.parse(s))),
-            DataType::Short => DataItem::Short(try!(self.parse(s))),
-            DataType::UShort => DataItem::UShort(try!(self.parse(s))),
-            DataType::Int => DataItem::Int(try!(self.parse(s))),
-            DataType::UInt => DataItem::UInt(try!(self.parse(s))),
-            DataType::Float => DataItem::Float(try!(self.parse(s))),
-            DataType::Double => DataItem::Double(try!(self.parse(s))),
-            DataType::List(ref item_type) => {
+            PropertyType::Char => Property::Char(try!(self.parse(s))),
+            PropertyType::UChar => Property::UChar(try!(self.parse(s))),
+            PropertyType::Short => Property::Short(try!(self.parse(s))),
+            PropertyType::UShort => Property::UShort(try!(self.parse(s))),
+            PropertyType::Int => Property::Int(try!(self.parse(s))),
+            PropertyType::UInt => Property::UInt(try!(self.parse(s))),
+            PropertyType::Float => Property::Float(try!(self.parse(s))),
+            PropertyType::Double => Property::Double(try!(self.parse(s))),
+            PropertyType::List(ref property_type) => {
                 let size : usize = try!(self.parse(s));
-                let mut v = Vec::<DataItem>::new();
+                let mut v = Vec::<Property>::new();
                 for _ in 0..size {
-                    let item = try!(self.read_properties(elem_iter, &item_type));
-                    v.push(item);
+                    let property = try!(self.read_properties(elem_iter, &property_type));
+                    v.push(property);
                 }
-                DataItem::List(v)
+                Property::List(v)
             }
         };
         Ok(result)
     }
 }
-
 
 
 #[cfg(test)]
@@ -358,14 +351,16 @@ mod tests {
     fn read_property_ok() {
         let p = Parser::new();
         let txt = "0 1 2 3";
-        let mut prop = ItemMap::<Property>::new();
-        prop.add(Property{name: "a".to_string(), data_type: DataType::Char});
-        prop.add(Property{name: "b".to_string(), data_type: DataType::UChar});
-        prop.add(Property{name: "c".to_string(), data_type: DataType::Short});
-        prop.add(Property{name: "d".to_string(), data_type: DataType::UShort});
+        let mut prop = KeyMap::<PropertyDef>::new();
+        prop.add(PropertyDef::new("a".to_string(), PropertyType::Char));
+        prop.add(PropertyDef::new("b".to_string(), PropertyType::UChar));
+        prop.add(PropertyDef::new("c".to_string(), PropertyType::Short));
+        prop.add(PropertyDef::new("d".to_string(), PropertyType::UShort));
+        let mut elem_def = ElementDef::new("dummy".to_string(), 0);
+        elem_def.properties = prop;
 
-        let items = p.read_element_line(&txt, &prop);
-        assert!(items.is_ok(), format!("error: {:?}", items));
+        let properties = p.read_element_line(&txt, &elem_def);
+        assert!(properties.is_ok(), format!("error: {:?}", properties));
     }
     #[test]
     fn magic_number_ok() {
@@ -421,7 +416,7 @@ mod tests {
     fn element_ok() {
         assert_ok!(
             g::element("element vertex 8"),
-            ElementHeader::new("vertex".to_string(), 8)
+            ElementDef::new("vertex".to_string(), 8)
         );
     }
     #[test]
@@ -432,20 +427,14 @@ mod tests {
     fn property_ok() {
         assert_ok!(
             g::property("property char c"),
-            Property {
-                name: "c".to_string(),
-                data_type: DataType::Char,
-            }
+            PropertyDef::new("c".to_string(), PropertyType::Char)
         );
     }
     #[test]
     fn property_list_ok() {
         assert_ok!(
             g::property("property list uchar int c"),
-            Property {
-                name: "c".to_string(),
-                data_type: DataType::List(Box::new(DataType::Int)),
-            }
+            PropertyDef::new("c".to_string(), PropertyType::List(Box::new(PropertyType::Int)))
         );
     }
     #[test]

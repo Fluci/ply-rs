@@ -20,17 +20,17 @@ text -> String
 line_break
 	= "\r\n" / [\n\r]
 
-data_type -> DataType
-	= "char"   { DataType::Char }
-	/ "uchar"  { DataType::UChar }
-	/ "short"  { DataType::Short }
-	/ "ushort" { DataType::UShort }
-	/ "int"    { DataType::Int }
-	/ "uint"   { DataType::UInt }
-	/ "float"  { DataType::Float }
-	/ "double" { DataType::Double }
+data_type -> PropertyType
+	= "char"   { PropertyType::Char }
+	/ "uchar"  { PropertyType::UChar }
+	/ "short"  { PropertyType::Short }
+	/ "ushort" { PropertyType::UShort }
+	/ "int"    { PropertyType::Int }
+	/ "uint"   { PropertyType::UInt }
+	/ "float"  { PropertyType::Float }
+	/ "double" { PropertyType::Double }
 	/ "list" space "uchar" space t:data_type {
-		DataType::List(Box::new(t))
+		PropertyType::List(Box::new(t))
 	}
 
 pub magic_number
@@ -60,17 +60,14 @@ pub comment -> Comment
 pub obj_info -> ObjInfo
 	= "obj_info" space c:text { c.to_string() }
 
-pub element -> ElementHeader
+pub element -> ElementDef
 	= "element" space id:$(ident) space n:uint {
-		ElementHeader::new(id.to_string(), n)
+		ElementDef::new(id.to_string(), n as usize)
 	}
 
-pub property -> Property
-	= "property" space t:data_type space id:ident {
-		Property {
-			name: id,
-			data_type: t,
-		}
+pub property -> PropertyDef
+	= "property" space data_type:data_type space id:ident {
+		PropertyDef::new(id, data_type)
 	}
 
 pub end_header

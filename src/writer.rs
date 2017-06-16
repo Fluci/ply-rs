@@ -8,47 +8,26 @@ pub enum NewLine {
     RN
 }
 
-pub trait ToItem<P> {
-    fn to_item(&self, props_def: &ItemMap<Property>) -> Result<DefaultElementType>;
+pub trait ToElement<P> {
+    fn to_element(&self, element_def: &ElementDef) -> Result<DefaultElement>;
 }
 
-impl ToItem<DefaultElementType> for DefaultElementType {
+impl ToElement<DefaultElement> for DefaultElement {
     // simple identity
-    fn to_item(&self, _props_def: &ItemMap<Property>) -> Result<ItemMap<DataItem>> {
+    fn to_element(&self, _props_def: &ElementDef) -> Result<DefaultElement> {
         Ok(self.clone())
-    }
-}
-
-pub trait PropertyBuilder<P> {
-    fn build_property_from_element(&self, props_def: &ItemMap<Property>, props_data: &P) -> Result<ItemMap<DataItem>>;
-}
-
-struct PBuilder {}
-
-impl PropertyBuilder<ItemMap<DataItem>> for PBuilder {
-    // simple identity
-    fn build_property_from_element(&self, _props_def: &ItemMap<Property>, props_data: &DefaultElementType) -> Result<ItemMap<DataItem>> {
-        Ok(props_data.clone())
     }
 }
 
 
 use std::marker::PhantomData;
-pub struct Writer<P: ToItem<P>> {
+pub struct Writer<P: ToElement<P>> {
     /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
     new_line: String,
     phantom: PhantomData<P>,
 }
-/*
-impl Writer<DefaultElementType> {
-    pub fn new() -> Self {
-        Writer {
-            new_line: "\r\n".to_string(),
-            property_builder: Box::new(PBuilder{})
-        }
-    }
-}*/
-impl<P: ToItem<P>> Writer<P> {
+
+impl<P: ToElement<P>> Writer<P> {
     pub fn new() -> Self {
         Writer {
             new_line: "\r\n".to_string(),
@@ -66,8 +45,8 @@ impl<P: ToItem<P>> Writer<P> {
     // TODO: make consistency check
     pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply<P>) -> Result<usize> {
         let mut written = 0;
-        written += try!(self.write_header(out, &ply));
-        written += try!(self.write_payload(out, &ply));
+        written += try!(self.write_header(out, &ply.header));
+        written += try!(self.write_payload(out, &ply.payload, &ply.header.elements));
         out.flush().unwrap();
         Ok(written)
     }
@@ -97,13 +76,13 @@ impl<P: ToItem<P>> Writer<P> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_line_element_decl<T: Write>(&self, out: &mut T, element: &ElementHeader) -> Result<usize> {
+    pub fn write_line_element_definition<T: Write>(&self, out: &mut T, element: &ElementDef) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(format!("element {} {}", element.name, element.count).as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_line_property_decl<T: Write>(&self, out: &mut T, property: &Property) -> Result<usize> {
+    pub fn write_line_property_definition<T: Write>(&self, out: &mut T, property: &PropertyDef) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("property ".as_bytes()));
         written += try!(self.write_property_type(out, &property.data_type));
@@ -112,11 +91,12 @@ impl<P: ToItem<P>> Writer<P> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_element_decl<T: Write>(&self, out: &mut T, element: &Element<P>) -> Result<usize> {
+    /// Writes the element line and all the property definitions
+    pub fn write_element_definition<T: Write>(&self, out: &mut T, element: &ElementDef) -> Result<usize> {
         let mut written = 0;
-        written += try!(self.write_line_element_decl(out, &element.header));
-        for (_, p) in &element.header.properties {
-            written += try!(self.write_line_property_decl(out, &p));
+        written += try!(self.write_line_element_definition(out, &element));
+        for (_, p) in &element.properties {
+            written += try!(self.write_line_property_definition(out, &p));
         }
         Ok(written)
     }
@@ -126,7 +106,7 @@ impl<P: ToItem<P>> Writer<P> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Ply<P>) -> Result<usize> {
+    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Header) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_magic_number(out));
         written += try!(self.write_line_format(out, &header.encoding, &header.version));
@@ -137,22 +117,50 @@ impl<P: ToItem<P>> Writer<P> {
             written += try!(self.write_line_obj_info(out, oi));
         }
         for (_, e) in &header.elements {
-            written += try!(self.write_element_decl(out, &e));
+            written += try!(self.write_element_definition(out, &e));
         }
         written += try!(self.write_line_end_header(out));
         Ok(written)
     }
-    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Ply<P>) -> Result<usize> {
+
+    fn write_encoding<T: Write>(&self, out: &mut T, encoding: &Encoding) -> Result<usize> {
+        let s = match *encoding {
+            Encoding::Ascii => "ascii",
+            Encoding::BinaryBigEndian => "binary_big_endian",
+            Encoding::BinaryLittleEndian => "binary_little_endian",
+        };
+        out.write(s.as_bytes())
+    }
+    fn write_property_type<T: Write>(&self, out: &mut T, data_type: &PropertyType) -> Result<usize> {
+        match *data_type {
+            PropertyType::Char => out.write("char".as_bytes()),
+            PropertyType::UChar => out.write("uchar".as_bytes()),
+            PropertyType::Short => out.write("short".as_bytes()),
+            PropertyType::UShort => out.write("ushort".as_bytes()),
+            PropertyType::Int => out.write("int".as_bytes()),
+            PropertyType::UInt => out.write("uint".as_bytes()),
+            PropertyType::Float => out.write("float".as_bytes()),
+            PropertyType::Double => out.write("double".as_bytes()),
+            PropertyType::List(ref t) => {
+                let mut written = try!(out.write("list uchar ".as_bytes()));
+                written += try!(self.write_property_type(out, t));
+                Ok(written)
+            }
+        }
+    }
+    ///// Payload
+    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Payload<P>, element_defs: &KeyMap<ElementDef>) -> Result<usize> {
         let mut written = 0;
-        for (_, element) in &payload.elements {
-            for e in &element.payload {
-                let prop = try!(e.to_item(&element.header.properties));
-                written += try!(self.write_line_payload_element(out, &prop));
+        for (k, element_list) in payload {
+            let element_def = &element_defs[k];
+            for e in element_list {
+                let raw_element = try!(e.to_element(element_def));
+                written += try!(self.write_line_payload_element(out, &raw_element));
             }
         }
         Ok(written)
     }
-    pub fn write_line_payload_element<T: Write>(&mut self, out: &mut T, element: &PayloadElement) -> Result<usize> {
+    pub fn write_line_payload_element<T: Write>(&mut self, out: &mut T, element: &DefaultElement) -> Result<usize> {
         let mut written = 0;
         let mut p_iter = element.iter();
         let (_name, prop_val) = p_iter.next().unwrap();
@@ -169,43 +177,17 @@ impl<P: ToItem<P>> Writer<P> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-
-    fn write_encoding<T: Write>(&self, out: &mut T, encoding: &Encoding) -> Result<usize> {
-        let s = match *encoding {
-            Encoding::Ascii => "ascii",
-            Encoding::BinaryBigEndian => "binary_big_endian",
-            Encoding::BinaryLittleEndian => "binary_little_endian",
-        };
-        out.write(s.as_bytes())
-    }
-    fn write_property_type<T: Write>(&self, out: &mut T, data_type: &DataType) -> Result<usize> {
-        match *data_type {
-            DataType::Char => out.write("char".as_bytes()),
-            DataType::UChar => out.write("uchar".as_bytes()),
-            DataType::Short => out.write("short".as_bytes()),
-            DataType::UShort => out.write("ushort".as_bytes()),
-            DataType::Int => out.write("int".as_bytes()),
-            DataType::UInt => out.write("uint".as_bytes()),
-            DataType::Float => out.write("float".as_bytes()),
-            DataType::Double => out.write("double".as_bytes()),
-            DataType::List(ref t) => {
-                let mut written = try!(out.write("list uchar ".as_bytes()));
-                written += try!(self.write_property_type(out, t));
-                Ok(written)
-            }
-        }
-    }
-    fn write_payload_property<T: Write>(&self, out: &mut T, data_item: &DataItem) -> Result<usize> {
-         let result = match *data_item {
-            DataItem::Char(ref v) => self.write_simple_value(v, out),
-            DataItem::UChar(ref v) => self.write_simple_value(v, out),
-            DataItem::Short(ref v) => self.write_simple_value(v, out),
-            DataItem::UShort(ref v) => self.write_simple_value(v, out),
-            DataItem::Int(ref v) => self.write_simple_value(v, out),
-            DataItem::UInt(ref v) => self.write_simple_value(v, out),
-            DataItem::Float(ref v) => self.write_simple_value(v, out),
-            DataItem::Double(ref v) => self.write_simple_value(v, out),
-            DataItem::List(ref v) => {
+    fn write_payload_property<T: Write>(&self, out: &mut T, data_element: &Property) -> Result<usize> {
+         let result = match *data_element {
+            Property::Char(ref v) => self.write_simple_value(v, out),
+            Property::UChar(ref v) => self.write_simple_value(v, out),
+            Property::Short(ref v) => self.write_simple_value(v, out),
+            Property::UShort(ref v) => self.write_simple_value(v, out),
+            Property::Int(ref v) => self.write_simple_value(v, out),
+            Property::UInt(ref v) => self.write_simple_value(v, out),
+            Property::Float(ref v) => self.write_simple_value(v, out),
+            Property::Double(ref v) => self.write_simple_value(v, out),
+            Property::List(ref v) => {
                 let mut written = 0;
                 written += try!(out.write(&v.len().to_string().as_bytes()));
                 for e in v {

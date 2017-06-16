@@ -3,7 +3,7 @@ use ply_rs::*;
 use ply_rs::ply::*;
 use std::io::{ Read, BufReader };
 
-type Ply = ply::Ply<ply::DefaultElementType>;
+type Ply = ply::Ply<ply::DefaultElement>;
 
 fn read_buff<T: Read>(mut buf: &mut T) -> Ply {
     let p = parser::Parser::new();
@@ -31,46 +31,51 @@ fn read_write_ply(ply: &Ply) -> Ply {
 }
 
 fn create_min() -> Ply {
-    Ply::new()
+    let mut ply = Ply::new();
+    assert!(ply.make_consistent().is_ok());
+    ply
 }
 
 fn create_basic_header() -> Ply {
     let mut ply = Ply::new();
-    let p = Property::new("x".to_string(), DataType::Int);
-    let mut e = Element::new(ElementHeader::new("point".to_string(), 0));
-    e.header.properties.add(p);
+    let p = PropertyDef::new("x".to_string(), PropertyType::Int);
+    let mut e = ElementDef::new("point".to_string(), 0);
+    e.properties.add(p);
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
-    ply.elements.add(e);
-    ply.comments.push(c);
-    ply.obj_infos.push(oi);
+    ply.header.elements.add(e);
+    ply.header.comments.push(c);
+    ply.header.obj_infos.push(oi);
+    assert!(ply.make_consistent().is_ok());
     ply
 }
 
 fn create_single_elements() -> Ply {
     let mut ply = Ply::new();
 
-    let mut e = Element::new(ElementHeader::new("point".to_string(), 2));
-    let p = Property::new("x".to_string(), DataType::Int);
-    e.header.properties.add(p);
-    let p = Property::new("y".to_string(), DataType::UInt);
-    e.header.properties.add(p);
+    let mut e = ElementDef::new("point".to_string(), 2);
+    let p = PropertyDef::new("x".to_string(), PropertyType::Int);
+    e.properties.add(p);
+    let p = PropertyDef::new("y".to_string(), PropertyType::UInt);
+    e.properties.add(p);
 
-    let mut pe = PayloadElement::new();
-    pe.insert("x".to_string(), DataItem::Int(-7));
-    pe.insert("y".to_string(), DataItem::UInt(5));
-    e.payload.push(pe);
-    let mut pe = PayloadElement::new();
-    pe.insert("x".to_string(), DataItem::Int(2));
-    pe.insert("y".to_string(), DataItem::UInt(4));
-    e.payload.push(pe);
+    let mut list = Vec::new();
+    let mut pe = KeyMap::new();
+    pe.insert("x".to_string(), Property::Int(-7));
+    pe.insert("y".to_string(), Property::UInt(5));
+    list.push(pe);
+    let mut pe = KeyMap::new();
+    pe.insert("x".to_string(), Property::Int(2));
+    pe.insert("y".to_string(), Property::UInt(4));
+    list.push(pe);
+    ply.payload.insert("point".to_string(), list);
 
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
-    ply.elements.add(e);
-    ply.comments.push(c);
-    ply.obj_infos.push(oi);
-
+    ply.header.elements.add(e);
+    ply.header.comments.push(c);
+    ply.header.obj_infos.push(oi);
+    assert!(ply.make_consistent().is_ok());
     ply
 }
 

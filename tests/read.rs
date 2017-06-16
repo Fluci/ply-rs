@@ -1,7 +1,7 @@
 extern crate ply_rs;
 use ply_rs::*;
 
-type Ply = ply::Ply<ply::DefaultElementType>;
+type Ply = ply::Ply<ply::DefaultElement>;
 
 fn read_file(path: &str) -> Ply {
     let mut f = std::fs::File::open(path).unwrap();
@@ -14,17 +14,17 @@ fn read_file(path: &str) -> Ply {
 #[test]
 fn read_empty() {
     let ply = read_file("example_plys/empty_ok_ascii.ply");
-    assert_eq!(ply.elements["face"].header.count, 0);
-    assert!(ply.elements["vertex"].payload.is_empty());
-    assert!(ply.elements["face"].payload.is_empty());
+    assert_eq!(ply.header.elements["face"].count, 0);
+    assert!(ply.payload["vertex"].is_empty());
+    assert!(ply.payload["face"].is_empty());
 }
 #[test]
 fn read_house() {
     let ply = read_file("example_plys/house_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
-    assert_eq!(ply.elements["face"].header.count, 3);
-    assert_eq!(ply.elements["vertex"].payload.len(), 5);
-    assert_eq!(ply.elements["face"].payload.len(), 3);
+    assert_eq!(ply.header.elements["face"].count, 3);
+    assert_eq!(ply.payload["vertex"].len(), 5);
+    assert_eq!(ply.payload["face"].len(), 3);
 }
 #[test]
 fn read_greg_turk_1() {
