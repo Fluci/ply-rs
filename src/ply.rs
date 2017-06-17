@@ -162,7 +162,14 @@ pub enum Property {
     UInt(u32),
     Float(f32),
     Double(f64),
-    List(Vec<Property>)
+    ListChar(Vec<i8>),
+    ListUChar(Vec<u8>),
+    ListShort(Vec<i16>),
+    ListUShort(Vec<u16>),
+    ListInt(Vec<i32>),
+    ListUInt(Vec<u32>),
+    ListFloat(Vec<f32>),
+    ListDouble(Vec<f64>)
 }
 
 #[derive(Debug, Clone, PartialEq)]

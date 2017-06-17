@@ -292,25 +292,47 @@ impl<P: FromElement<P>> Parser<P> {
             PropertyType::Float => Property::Float(try!(self.parse(s))),
             PropertyType::Double => Property::Double(try!(self.parse(s))),
             PropertyType::List(_, ref property_type) => {
-                let size : usize = try!(self.parse(s));
-                let mut v = Vec::<Property>::new();
-                for _ in 0..size {
-                    let property = try!(self.__read_ascii_property(elem_iter, &property_type));
-                    v.push(property);
+                let count : usize = try!(self.parse(s));
+                match **property_type {
+                    PropertyType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
+                    PropertyType::List(_, _) => return Err(Error::new(ErrorKind::InvalidInput, "You shall not write list of lists."))
                 }
-                Property::List(v)
             }
         };
         Ok(result)
     }
-    fn parse<T: FromStr>(&self, s: &str) -> Result<T>
-    where <T as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+
+    fn parse<D: FromStr>(&self, s: &str) -> Result<D>
+    where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
         let v = s.parse();
         match v {
             Ok(r) => Ok(r),
             Err(e) => Err(Error::new(ErrorKind::InvalidInput,
                 format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
         }
+    }
+    fn __read_ascii_list<D: FromStr>(&self, elem_iter: &mut Iter<String>, count: usize) -> Result<Vec<D>>
+        where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+        let mut list = Vec::<D>::new();
+        for i in 0..count {
+            let s : &String = match elem_iter.next() {
+                None => return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't find a list element at index {}.", i)
+                )),
+                Some(x) => x
+            };
+            let value : D = try!(self.parse(s));
+            list.push(value);
+        }
+        Ok(list)
     }
     fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
         let mut elems = Vec::<P>::new();
@@ -344,7 +366,7 @@ impl<P: FromElement<P>> Parser<P> {
             PropertyType::Float => Property::Float(try!(reader.read_f32::<B>())),
             PropertyType::Double => Property::Double(try!(reader.read_f64::<B>())),
             PropertyType::List(ref index_type, ref property_type) => {
-                let size : usize = match **index_type {
+                let count : usize = match **index_type {
                     PropertyType::Char => try!(reader.read_i8()) as usize,
                     PropertyType::UChar => try!(reader.read_u8()) as usize,
                     PropertyType::Short => try!(reader.read_i16::<B>()) as usize,
@@ -355,15 +377,35 @@ impl<P: FromElement<P>> Parser<P> {
                     PropertyType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in PropertyType.")),
                     PropertyType::List(_,_) => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, List declared in PropertyType.")),
                 };
-                let mut v = Vec::<Property>::new();
-                for _ in 0..size {
-                    let property = try!(self.__read_binary_property::<T, B>(reader, &property_type));
-                    v.push(property);
+                match **property_type {
+                    PropertyType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
+                    PropertyType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
+                    PropertyType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
+                    PropertyType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
+                    PropertyType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
+                    PropertyType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
+                    PropertyType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
+                    PropertyType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
+                    PropertyType::List(_, _) => return Err(Error::new(ErrorKind::InvalidInput, "List can not contain other lists."))
                 }
-                Property::List(v)
             }
         };
         Ok(result)
+    }
+    fn __read_binary_list<T: Read, D: FromStr>(&self, reader: &mut T, read_from: &Fn(&mut T) -> Result<D>, count: usize) -> Result<Vec<D>>
+        where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+        let mut list = Vec::<D>::new();
+        for i in 0..count {
+            let value : D = match read_from(reader) {
+                Err(e) => return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't find a list element at index {}.\n\tError: {:?}", i, e)
+                )),
+                Ok(x) => x
+            };
+            list.push(value);
+        }
+        Ok(list)
     }
 }
 

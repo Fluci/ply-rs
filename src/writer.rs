@@ -218,29 +218,14 @@ impl<P: ToElement<P>> Writer<P> {
             Property::UInt(ref v) => {try!(out.write_u32::<B>(*v)); 4},
             Property::Float(ref v) => {try!(out.write_f32::<B>(*v)); 4},
             Property::Double(ref v) => {try!(out.write_f64::<B>(*v)); 8},
-            Property::List(ref v) => {
-                let mut written = 0;
-                let index_type = match *property_type {
-                    PropertyType::List(ref i, _) => i,
-                    _ => return Err(Error::new(ErrorKind::InvalidInput, "Property definition must be of type List.")),
-                };
-                let vl = v.len();
-                written += match **index_type {
-                    PropertyType::Char => {try!(out.write_i8(vl as i8)); 1},
-                    PropertyType::UChar => {try!(out.write_u8(vl as u8)); 1}
-                    PropertyType::Short => {try!(out.write_i16::<B>(vl as i16)); 2},
-                    PropertyType::UShort => {try!(out.write_u16::<B>(vl as u16)); 2},
-                    PropertyType::Int => {try!(out.write_i32::<B>(vl as i32)); 4}
-                    PropertyType::UInt => {try!(out.write_u32::<B>(vl as u32)); 4},
-                    PropertyType::Float => return Err(Error::new(ErrorKind::InvalidInput, "List index must have integer type, Float found.")),
-                    PropertyType::Double => return Err(Error::new(ErrorKind::InvalidInput, "List index must have integer type, Double found.")),
-                    PropertyType::List(_,_) => return Err(Error::new(ErrorKind::InvalidInput, "List index must have integer type, List found.")),
-                };
-                for e in v {
-                    written += try!(self.__write_binary_property::<T, B>(out, &e, &*index_type));
-                }
-                written as usize
-            },
+            Property::ListChar(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_i8(*x)); Ok(1)} )),
+            Property::ListUChar(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_u8(*x)); Ok(1)} )),
+            Property::ListShort(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_i16::<B>(*x)); Ok(2)} )),
+            Property::ListUShort(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_u16::<B>(*x)); Ok(2)} )),
+            Property::ListInt(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_i32::<B>(*x)); Ok(4)} )),
+            Property::ListUInt(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_u32::<B>(*x)); Ok(4)} )),
+            Property::ListFloat(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_f32::<B>(*x)); Ok(4)} )),
+            Property::ListDouble(ref v) => try!(self.write_binary_list(v, out, &|o, x| {try!(o.write_f64::<B>(*x)); Ok(8)} )),
         };
         Ok(result)
     }
@@ -271,15 +256,14 @@ impl<P: ToElement<P>> Writer<P> {
             Property::UInt(ref v) => self.write_simple_value(v, out),
             Property::Float(ref v) => self.write_simple_value(v, out),
             Property::Double(ref v) => self.write_simple_value(v, out),
-            Property::List(ref v) => {
-                let mut written = 0;
-                written += try!(out.write(&v.len().to_string().as_bytes()));
-                for e in v {
-                    written += try!(out.write(" ".as_bytes()));
-                    written += try!(self.write_ascii_property(out, &e));
-                }
-                Ok(written)
-            },
+            Property::ListChar(ref v) => self.write_ascii_list(v, out),
+            Property::ListUChar(ref v) => self.write_ascii_list(v, out),
+            Property::ListShort(ref v) => self.write_ascii_list(v, out),
+            Property::ListUShort(ref v) => self.write_ascii_list(v, out),
+            Property::ListInt(ref v) => self.write_ascii_list(v, out),
+            Property::ListUInt(ref v) => self.write_ascii_list(v, out),
+            Property::ListFloat(ref v) => self.write_ascii_list(v, out),
+            Property::ListDouble(ref v) => self.write_ascii_list(v, out),
         };
         result
     }
@@ -290,4 +274,21 @@ impl<P: ToElement<P>> Writer<P> {
     fn write_simple_value<T: Write, V: ToString>(&self, value: &V, out: &mut T) -> Result<usize> {
         out.write(value.to_string().as_bytes())
     }
+    fn write_ascii_list<T: Write, D: Clone + Display>(&self, list: &Vec<D>, out: &mut T) -> Result<usize> {
+        self.write_list(list, out, &|o, number| o.write(number.to_string().as_bytes()))
+    }
+    fn write_binary_list<T: Write, D: Clone>(&self, list: &Vec<D>, out: &mut T, out_val: &Fn(&mut T, &D) -> Result<usize>) -> Result<usize> {
+        self.write_list(list, out, out_val)
+    }
+    fn write_list<T: Write, D: Clone>(&self, list: &Vec<D>, out: &mut T, out_val: &Fn(&mut T, &D) -> Result<usize>) -> Result<usize> {
+        let mut written = 0;
+        written += try!(out.write(&list.len().to_string().as_bytes()));
+        let b = " ".as_bytes();
+        for v in list {
+            written += try!(out.write(b));
+            written += try!(out_val(out, v));
+        }
+        Ok(written)
+    }
 }
+use std::fmt::Display;
