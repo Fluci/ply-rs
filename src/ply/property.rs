@@ -18,8 +18,12 @@ pub enum PropertyType {
 }
 
 pub trait PropertyAccess {
+    // TODO: default function?
     fn new() -> Self;
-    fn set_property(&mut self, key: String, property: Property);
+    fn set_property(&mut self, _key: String, _property: Property) {
+        // By default, do nothing
+        // Sombody might only want to write, no point in bothering him/her with setter implementations.
+    }
     fn get_char(&self, _key: &String) -> Option<i8> {
         None
     }

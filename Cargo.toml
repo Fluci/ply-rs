@@ -16,3 +16,6 @@ name = "read_ply"
 
 [[example]]
 name = "read_ply_header_only"
+
+[[example]]
+name = "read_ply_to_structs"
