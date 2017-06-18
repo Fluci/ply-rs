@@ -19,6 +19,13 @@ fn read_empty() {
     assert!(ply.payload["face"].is_empty());
 }
 #[test]
+fn read_empy_equal() {
+    let bin = read_file("example_plys/empty_2_ok_little_endian.ply");
+    let ascii = read_file("example_plys/empty_2_ok_ascii.ply");
+    assert_eq!(bin.header.elements, ascii.header.elements);
+    assert_eq!(bin.payload, ascii.payload);
+}
+#[test]
 fn read_house() {
     let ply = read_file("example_plys/house_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
@@ -28,9 +35,10 @@ fn read_house() {
 }
 #[test]
 fn read_house_equal() {
-    let bin = read_file("example_plys/house_ok_little_endian.ply");
-    let ascii = read_file("example_plys/house_ok_little_endian.ply");
-    assert_eq!(bin, ascii);
+    let bin = read_file("example_plys/house_2_ok_little_endian.ply");
+    let ascii = read_file("example_plys/house_2_ok_ascii.ply");
+    assert_eq!(bin.header.elements, ascii.header.elements);
+    assert_eq!(bin.payload, ascii.payload);
 }
 #[test]
 fn read_greg_turk_1() {
