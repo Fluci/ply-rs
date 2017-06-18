@@ -4,6 +4,8 @@ use std::string::ToString;
 use byteorder::{ BigEndian, LittleEndian, WriteBytesExt, ByteOrder };
 
 use ply::*;
+use std::fmt::Display;
+
 
 pub enum NewLine {
     N,
@@ -11,30 +13,18 @@ pub enum NewLine {
     RN
 }
 
-pub trait ToElement<P> {
-    fn to_element(&self, element_def: &ElementDef) -> Result<DefaultElement>;
-}
-
-impl ToElement<DefaultElement> for DefaultElement {
-    // simple identity
-    fn to_element(&self, _props_def: &ElementDef) -> Result<DefaultElement> {
-        Ok(self.clone())
-    }
-}
-
-
 use std::marker::PhantomData;
-pub struct Writer<P: ToElement<P> + PropertyAccess> {
+pub struct Writer<E: PropertyAccess> {
     /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
     new_line: String,
-    phantom: PhantomData<P>,
+    phantom: PhantomData<E>,
 }
 macro_rules! get_prop(
     // TODO: errror
     ($e:expr) => (match $e {None => return Ok(17), Some(x) => x})
 );
 
-impl<P: ToElement<P> + PropertyAccess> Writer<P> {
+impl<E: PropertyAccess> Writer<E> {
     pub fn new() -> Self {
         Writer {
             new_line: "\r\n".to_string(),
@@ -50,7 +40,7 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
     }
     // TODO: think about masking and valid/invalid symbols
     // TODO: make consistency check
-    pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply<P>) -> Result<usize> {
+    pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply<E>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_header(out, &ply.header));
         written += try!(self.write_payload(out, &ply.payload, &ply.header));
@@ -168,7 +158,7 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
         }
     }
     ///// Payload
-    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Payload<P>, header: &Header) -> Result<usize> {
+    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Payload<E>, header: &Header) -> Result<usize> {
         let mut written = 0;
         let element_defs = &header.elements;
         for (k, element_list) in payload {
@@ -177,12 +167,11 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
         }
         Ok(written)
     }
-    pub fn write_payload_of_element<T: Write>(&mut self, out: &mut T, element_list: &Vec<P>, element_def: &ElementDef, header: &Header) -> Result<usize> {
+    pub fn write_payload_of_element<T: Write>(&mut self, out: &mut T, element_list: &Vec<E>, element_def: &ElementDef, header: &Header) -> Result<usize> {
         let mut written = 0;
         match header.encoding {
-            Encoding::Ascii => for e in element_list {
-                let raw_element = try!(e.to_element(element_def));
-                written += try!(self.__write_ascii_element(out, &raw_element));
+            Encoding::Ascii => for element in element_list {
+                written += try!(self.__write_ascii_element(out, element, &element_def));
             },
             Encoding::BinaryBigEndian => for element in element_list {
                 written += try!(self.__write_binary_element::<T, BigEndian>(out, element, &element_def));
@@ -193,19 +182,18 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
         }
         Ok(written)
     }
-    pub fn write_ascii_element<T: Write>(&self, out: &mut T, element: &P, element_def: &ElementDef) -> Result<usize> {
-        let raw_element = try!(element.to_element(element_def));
-        self.__write_ascii_element(out, &raw_element)
+    pub fn write_ascii_element<T: Write>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
+        self.__write_ascii_element(out, element, element_def)
     }
-    pub fn write_big_endian_element<T: Write> (&self, out: &mut T, element: &P, element_def: &ElementDef) -> Result<usize> {
+    pub fn write_big_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         self.__write_binary_element::<T, BigEndian>(out, element, element_def)
     }
-    pub fn write_little_endian_element<T: Write> (&self, out: &mut T, element: &P, element_def: &ElementDef) -> Result<usize> {
+    pub fn write_little_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         self.__write_binary_element::<T, BigEndian>(out, element, element_def)
     }
 
     // private payload
-    fn __write_binary_element<T: Write, B: ByteOrder>(&self, out: &mut T, element: &P, element_def: &ElementDef) -> Result<usize> {
+    fn __write_binary_element<T: Write, B: ByteOrder>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         let mut written = 0;
         for (k, property_def) in &element_def.properties {
             match property_def.data_type {
@@ -256,41 +244,46 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
         }
         Ok(written)
     }
-    fn __write_ascii_element<T: Write>(&self, out: &mut T, element: &DefaultElement) -> Result<usize> {
+    fn __write_ascii_element<T: Write>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         let mut written = 0;
-        let mut p_iter = element.iter();
-        let (_name, prop_val) = p_iter.next().unwrap();
-        written += try!(self.write_ascii_property(out, prop_val));
+        let mut p_iter = element_def.properties.iter();
+        let (_k, prop_type) = p_iter.next().unwrap();
+        written += try!(self.write_ascii_property(out, element, &prop_type));
         loop {
             written += try!(out.write(" ".as_bytes()));
             let n = p_iter.next();
             if n == None {
                 break;
             }
-            let (_name, prop_val) = n.unwrap();
-            written += try!(self.write_ascii_property(out, prop_val));
+            let (_name, prop_type) = n.unwrap();
+            written += try!(self.write_ascii_property(out, element, prop_type));
         }
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    fn write_ascii_property<T: Write>(&self, out: &mut T, data_element: &Property) -> Result<usize> {
-         let result = match *data_element {
-            Property::Char(ref v) => self.write_simple_value(v, out),
-            Property::UChar(ref v) => self.write_simple_value(v, out),
-            Property::Short(ref v) => self.write_simple_value(v, out),
-            Property::UShort(ref v) => self.write_simple_value(v, out),
-            Property::Int(ref v) => self.write_simple_value(v, out),
-            Property::UInt(ref v) => self.write_simple_value(v, out),
-            Property::Float(ref v) => self.write_simple_value(v, out),
-            Property::Double(ref v) => self.write_simple_value(v, out),
-            Property::ListChar(ref v) => self.write_ascii_list(v, out),
-            Property::ListUChar(ref v) => self.write_ascii_list(v, out),
-            Property::ListShort(ref v) => self.write_ascii_list(v, out),
-            Property::ListUShort(ref v) => self.write_ascii_list(v, out),
-            Property::ListInt(ref v) => self.write_ascii_list(v, out),
-            Property::ListUInt(ref v) => self.write_ascii_list(v, out),
-            Property::ListFloat(ref v) => self.write_ascii_list(v, out),
-            Property::ListDouble(ref v) => self.write_ascii_list(v, out),
+    fn write_ascii_property<T: Write>(&self, out: &mut T, element: &E, prop_type: &PropertyDef) -> Result<usize> {
+        let k = &prop_type.name;
+        let result = match prop_type.data_type {
+            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
+                ScalarType::Char => self.write_ascii_scalar(out, get_prop!(element.get_char(k))),
+                ScalarType::UChar => self.write_ascii_scalar(out, get_prop!(element.get_uchar(k))),
+                ScalarType::Short => self.write_ascii_scalar(out, get_prop!(element.get_short(k))),
+                ScalarType::UShort => self.write_ascii_scalar(out, get_prop!(element.get_ushort(k))),
+                ScalarType::Int => self.write_ascii_scalar(out, get_prop!(element.get_int(k))),
+                ScalarType::UInt => self.write_ascii_scalar(out, get_prop!(element.get_uint(k))),
+                ScalarType::Float => self.write_ascii_scalar(out, get_prop!(element.get_float(k))),
+                ScalarType::Double => self.write_ascii_scalar(out, get_prop!(element.get_double(k))),
+            },
+            PropertyType::List(_, ref scalar_type) => match *scalar_type {
+                ScalarType::Char => self.write_ascii_list(get_prop!(element.get_list_char(k)), out),
+                ScalarType::UChar => self.write_ascii_list(get_prop!(element.get_list_uchar(k)), out),
+                ScalarType::Short => self.write_ascii_list(get_prop!(element.get_list_short(k)), out),
+                ScalarType::UShort => self.write_ascii_list(get_prop!(element.get_list_ushort(k)), out),
+                ScalarType::Int => self.write_ascii_list(get_prop!(element.get_list_int(k)), out),
+                ScalarType::UInt => self.write_ascii_list(get_prop!(element.get_list_uint(k)), out),
+                ScalarType::Float => self.write_ascii_list(get_prop!(element.get_list_float(k)), out),
+                ScalarType::Double => self.write_ascii_list(get_prop!(element.get_list_double(k)), out),
+            }
         };
         result
     }
@@ -298,21 +291,17 @@ impl<P: ToElement<P> + PropertyAccess> Writer<P> {
     fn write_new_line<T: Write>(&self, out: &mut T) -> Result<usize> {
         out.write(self.new_line.as_bytes())
     }
-    fn write_simple_value<T: Write, V: ToString>(&self, value: &V, out: &mut T) -> Result<usize> {
+    fn write_ascii_scalar<T: Write, V: ToString>(&self, out: &mut T, value: V) -> Result<usize> {
         out.write(value.to_string().as_bytes())
     }
-    fn write_ascii_list<T: Write, D: Clone + Display>(&self, list: &Vec<D>, out: &mut T) -> Result<usize> {
-        self.write_list(list, out, &|o, number| o.write(number.to_string().as_bytes()))
-    }
-    fn write_list<T: Write, D: Clone>(&self, list: &[D], out: &mut T, out_val: &Fn(&mut T, &D) -> Result<usize>) -> Result<usize> {
+    fn write_ascii_list<T: Write, D: Clone + Display>(&self, list: &[D], out: &mut T) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(&list.len().to_string().as_bytes()));
-        let b = " ".as_bytes();
+        let b = " ".as_bytes();;
         for v in list {
             written += try!(out.write(b));
-            written += try!(out_val(out, v));
+            written += try!(out.write(v.to_string().as_bytes()));
         }
         Ok(written)
     }
 }
-use std::fmt::Display;

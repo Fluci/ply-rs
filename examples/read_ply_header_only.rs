@@ -13,7 +13,7 @@ fn main() {
     let mut reader = std::io::BufReader::new(f);
 
     // create a parser
-    let p = ply::parser::Parser::new();
+    let p = ply::parser::Parser::<ply::ply::DefaultElement>::new();
 
     // use the parser: read the entire file
     let ply = p.read_header(&mut reader);

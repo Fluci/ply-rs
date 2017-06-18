@@ -8,7 +8,7 @@ fn main() {
     let mut f = std::fs::File::open(path).unwrap();
 
     // create a parser
-    let p = ply::parser::Parser::new();
+    let p = ply::parser::Parser::<ply::ply::DefaultElement>::new();
 
     // use the parser: read the entire file
     let ply = p.read_ply(&mut f);

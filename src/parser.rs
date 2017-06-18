@@ -53,15 +53,13 @@ pub struct Parser<E: PropertyAccess> {
       phantom: PhantomData<E>,
 }
 
-impl Parser<DefaultElement> {
+impl<E: PropertyAccess> Parser<E> {
     pub fn new() -> Self {
         Parser {
             phantom: PhantomData
         }
     }
-}
-impl<P: PropertyAccess> Parser<P> {
-    pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<P>> {
+    pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<E>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
         let header = try!(self.__read_header(&mut source, &mut location));
@@ -84,7 +82,7 @@ impl<P: PropertyAccess> Parser<P> {
             )),
         }
     }
-    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<P>> {
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<E>> {
         let mut location = LocationTracker::new();
         match header.encoding {
             Encoding::Ascii => self.__read_ascii_payload_for_element(reader, &mut location, element_def),
@@ -92,16 +90,16 @@ impl<P: PropertyAccess> Parser<P> {
             Encoding::BinaryLittleEndian => self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def),
         }
     }
-    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
+    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
         /// Reduce coupling with ByteOrder
         self.__read_binary_element::<T, BigEndian>(reader, element_def)
 
     }
-    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
+    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
         /// Reduce coupling with ByteOrder
         self.__read_binary_element::<T, LittleEndian>(reader, element_def)
     }
-    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<P> {
+    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
         self.__read_ascii_element(line, element_def)
     }
 
@@ -194,7 +192,7 @@ impl<P: PropertyAccess> Parser<P> {
         })
     }
     /// internal dispatcher based on the encoding
-    fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<P>> {
+    fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<E>> {
         let mut payload = Payload::new();
         match header.encoding {
             Encoding::Ascii => for (k, ref e) in &header.elements {
@@ -212,8 +210,8 @@ impl<P: PropertyAccess> Parser<P> {
         }
         Ok(payload)
     }
-    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
-        let mut elems = Vec::<P>::new();
+    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut elems = Vec::<E>::new();
         let mut line_str = String::new();
         for _ in 0..element_def.count {
             line_str.clear();
@@ -228,7 +226,7 @@ impl<P: PropertyAccess> Parser<P> {
         }
         Ok(elems)
     }
-    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<P> {
+    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
             Err(ref e) => return Err(Error::new(
@@ -238,7 +236,7 @@ impl<P: PropertyAccess> Parser<P> {
         };
 
         let mut elem_it : Iter<String> = elems.iter();
-        let mut vals = P::new();
+        let mut vals = E::new();
         for (k, p) in &element_def.properties {
             let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
             vals.set_property(k.clone(), new_p);
@@ -307,8 +305,8 @@ impl<P: PropertyAccess> Parser<P> {
         }
         Ok(list)
     }
-    fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
-        let mut elems = Vec::<P>::new();
+    fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut elems = Vec::<E>::new();
         for _ in 0..element_def.count {
             let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
             elems.push(element);
@@ -316,8 +314,8 @@ impl<P: PropertyAccess> Parser<P> {
         }
         Ok(elems)
     }
-    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
-        let mut raw_element = P::new();
+    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        let mut raw_element = E::new();
 
         for (k, p) in &element_def.properties {
             let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
@@ -404,7 +402,7 @@ mod tests {
     }
     #[test]
     fn parser_header_ok(){
-        let p = Parser::new();
+        let p = Parser::<DefaultElement>::new();
         let txt = "ply\nformat ascii 1.0\nend_header\n";
         let mut bytes = txt.as_bytes();
         assert_ok!(p.read_header(&mut bytes));
@@ -424,7 +422,7 @@ mod tests {
     fn parser_demo_ok(){
         let txt = "ply\nformat ascii 1.0\nend_header\n";
         let mut bytes = txt.as_bytes();
-        let p = Parser::new();
+        let p = Parser::<DefaultElement>::new();
         assert_ok!(p.read_header(&mut bytes));
 
         let txt = "ply\n\
@@ -449,12 +447,12 @@ mod tests {
         -7 5\r\n\
         2 4\r\n";
         let mut bytes = txt.as_bytes();
-        let p = Parser::new();
+        let p = Parser::<DefaultElement>::new();
         assert_ok!(p.read_ply(&mut bytes));
     }
     #[test]
     fn read_property_ok() {
-        let p = Parser::new();
+        let p = Parser::<DefaultElement>::new();
         let txt = "0 1 2 3";
         let mut prop = KeyMap::<PropertyDef>::new();
         prop.add(PropertyDef::new("a".to_string(), PropertyType::Scalar(ScalarType::Char)));
