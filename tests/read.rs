@@ -27,6 +27,12 @@ fn read_house() {
     assert_eq!(ply.payload["face"].len(), 3);
 }
 #[test]
+fn read_house_equal() {
+    let bin = read_file("example_plys/house_ok_little_endian.ply");
+    let ascii = read_file("example_plys/house_ok_little_endian.ply");
+    assert_eq!(bin, ascii);
+}
+#[test]
 fn read_greg_turk_1() {
     let ply = read_file("example_plys/greg_turk_example1_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
