@@ -20,17 +20,20 @@ text -> String
 line_break
 	= "\r\n" / [\n\r]
 
+scalar -> ScalarType
+	= "char"   { ScalarType::Char }
+	/ "uchar"  { ScalarType::UChar }
+	/ "short"  { ScalarType::Short }
+	/ "ushort" { ScalarType::UShort }
+	/ "int"    { ScalarType::Int }
+	/ "uint"   { ScalarType::UInt }
+	/ "float"  { ScalarType::Float }
+	/ "double" { ScalarType::Double }
+
 data_type -> PropertyType
-	= "char"   { PropertyType::Char }
-	/ "uchar"  { PropertyType::UChar }
-	/ "short"  { PropertyType::Short }
-	/ "ushort" { PropertyType::UShort }
-	/ "int"    { PropertyType::Int }
-	/ "uint"   { PropertyType::UInt }
-	/ "float"  { PropertyType::Float }
-	/ "double" { PropertyType::Double }
-	/ "list" space it:data_type space t:data_type {
-		PropertyType::List(Box::new(it), Box::new(t))
+	= s:scalar   { PropertyType::Scalar(s) }
+	/ "list" space it:scalar space t:scalar {
+		PropertyType::List(it, t)
 	}
 
 pub magic_number

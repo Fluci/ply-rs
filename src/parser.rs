@@ -35,18 +35,6 @@ macro_rules! is_line {
     );
 }
 
-fn parse_binary_rethrow<T, E: Debug>(location: &LocationTracker, e: E, message: &str) -> Result<T> {
-    Err(Error::new(
-        ErrorKind::InvalidInput,
-        format!("Line {}: {}\n\tError: {:?}", location.line_index, message, e)
-    ))
-}
-fn parse_binary_error<T>(location: &LocationTracker, message: &str) -> Result<T> {
-    Err(Error::new(
-        ErrorKind::InvalidInput,
-        format!("Line {}: {}", location.line_index, message)
-    ))
-}
 fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(Error::new(
         ErrorKind::InvalidInput,
@@ -60,18 +48,8 @@ fn parse_ascii_error<T>(location: &LocationTracker, line_str: &str, message: &st
     ))
 }
 
-pub trait FromElement<P> {
-    fn from_element(props_def: &ElementDef, props_data: DefaultElement) -> Result<P>;
-}
-
-impl FromElement<DefaultElement> for DefaultElement {
-    fn from_element(_props_def: &ElementDef, props_data: DefaultElement) -> Result<DefaultElement> {
-        Ok(props_data)
-    }
-}
-
 use std::marker::PhantomData;
-pub struct Parser<E: FromElement<E>> {
+pub struct Parser<E: PropertyAccess> {
       phantom: PhantomData<E>,
 }
 
@@ -82,7 +60,7 @@ impl Parser<DefaultElement> {
         }
     }
 }
-impl<P: FromElement<P>> Parser<P> {
+impl<P: PropertyAccess> Parser<P> {
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<P>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
@@ -116,17 +94,15 @@ impl<P: FromElement<P>> Parser<P> {
     }
     pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
         /// Reduce coupling with ByteOrder
-        let element = try!(self.__read_binary_element::<T, BigEndian>(reader, element_def));
-        P::from_element(element_def, element)
+        self.__read_binary_element::<T, BigEndian>(reader, element_def)
+
     }
     pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
         /// Reduce coupling with ByteOrder
-        let element = try!(self.__read_binary_element::<T, LittleEndian>(reader, element_def));
-        P::from_element(element_def, element)
+        self.__read_binary_element::<T, LittleEndian>(reader, element_def)
     }
     pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<P> {
-        let element = try!(self.__read_ascii_element(line, element_def));
-        P::from_element(element_def, element)
+        self.__read_ascii_element(line, element_def)
     }
 
     // private
@@ -247,16 +223,12 @@ impl<P: FromElement<P>> Parser<P> {
                 Ok(e) => e,
                 Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couln't read element line.")
             };
-            let element = match P::from_element(element_def, element) {
-                Ok(e) => e,
-                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couldn't convert element line.")
-            };
             elems.push(element);
             location.next_line();
         }
         Ok(elems)
     }
-    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<DefaultElement> {
+    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<P> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
             Err(ref e) => return Err(Error::new(
@@ -266,10 +238,10 @@ impl<P: FromElement<P>> Parser<P> {
         };
 
         let mut elem_it : Iter<String> = elems.iter();
-        let mut vals = DefaultElement::new();
+        let mut vals = P::new();
         for (k, p) in &element_def.properties {
             let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
-            vals.insert(k.clone(), new_p);
+            vals.set_property(k.clone(), new_p);
         }
         Ok(vals)
     }
@@ -283,26 +255,27 @@ impl<P: FromElement<P>> Parser<P> {
         };
 
         let result = match *data_type {
-            PropertyType::Char => Property::Char(try!(self.parse(s))),
-            PropertyType::UChar => Property::UChar(try!(self.parse(s))),
-            PropertyType::Short => Property::Short(try!(self.parse(s))),
-            PropertyType::UShort => Property::UShort(try!(self.parse(s))),
-            PropertyType::Int => Property::Int(try!(self.parse(s))),
-            PropertyType::UInt => Property::UInt(try!(self.parse(s))),
-            PropertyType::Float => Property::Float(try!(self.parse(s))),
-            PropertyType::Double => Property::Double(try!(self.parse(s))),
-            PropertyType::List(_, ref property_type) => {
+            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
+                ScalarType::Char => Property::Char(try!(self.parse(s))),
+                ScalarType::UChar => Property::UChar(try!(self.parse(s))),
+                ScalarType::Short => Property::Short(try!(self.parse(s))),
+                ScalarType::UShort => Property::UShort(try!(self.parse(s))),
+                ScalarType::Int => Property::Int(try!(self.parse(s))),
+                ScalarType::UInt => Property::UInt(try!(self.parse(s))),
+                ScalarType::Float => Property::Float(try!(self.parse(s))),
+                ScalarType::Double => Property::Double(try!(self.parse(s))),
+            },
+            PropertyType::List(_, ref scalar_type) => {
                 let count : usize = try!(self.parse(s));
-                match **property_type {
-                    PropertyType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
-                    PropertyType::List(_, _) => return Err(Error::new(ErrorKind::InvalidInput, "You shall not write list of lists."))
+                match *scalar_type {
+                    ScalarType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
                 }
             }
         };
@@ -337,56 +310,52 @@ impl<P: FromElement<P>> Parser<P> {
     fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<P>> {
         let mut elems = Vec::<P>::new();
         for _ in 0..element_def.count {
-            let raw_element = try!(self.__read_binary_element::<T, B>(reader, element_def));
-            let element = match P::from_element(element_def, raw_element) {
-                Ok(e) => e,
-                Err(e) => return parse_binary_rethrow(location, e, "Couldn't read binary property.")
-            };
+            let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
             elems.push(element);
         }
-        Ok(elems) // Mock
+        Ok(elems)
     }
-    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<DefaultElement> {
-        let mut raw_element = DefaultElement::new();
+    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<P> {
+        let mut raw_element = P::new();
 
         for (k, p) in &element_def.properties {
             let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
-            raw_element.insert(k.clone(), property);
+            raw_element.set_property(k.clone(), property);
         }
         Ok(raw_element)
     }
     fn __read_binary_property<T: Read, B: ByteOrder>(&self, reader: &mut T, data_type: &PropertyType) -> Result<Property> {
         let result = match *data_type {
-            PropertyType::Char => Property::Char(try!(reader.read_i8())),
-            PropertyType::UChar => Property::UChar(try!(reader.read_u8())),
-            PropertyType::Short => Property::Short(try!(reader.read_i16::<B>())),
-            PropertyType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
-            PropertyType::Int => Property::Int(try!(reader.read_i32::<B>())),
-            PropertyType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
-            PropertyType::Float => Property::Float(try!(reader.read_f32::<B>())),
-            PropertyType::Double => Property::Double(try!(reader.read_f64::<B>())),
+            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
+                ScalarType::Char => Property::Char(try!(reader.read_i8())),
+                ScalarType::UChar => Property::UChar(try!(reader.read_u8())),
+                ScalarType::Short => Property::Short(try!(reader.read_i16::<B>())),
+                ScalarType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
+                ScalarType::Int => Property::Int(try!(reader.read_i32::<B>())),
+                ScalarType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
+                ScalarType::Float => Property::Float(try!(reader.read_f32::<B>())),
+                ScalarType::Double => Property::Double(try!(reader.read_f64::<B>())),
+            },
             PropertyType::List(ref index_type, ref property_type) => {
-                let count : usize = match **index_type {
-                    PropertyType::Char => try!(reader.read_i8()) as usize,
-                    PropertyType::UChar => try!(reader.read_u8()) as usize,
-                    PropertyType::Short => try!(reader.read_i16::<B>()) as usize,
-                    PropertyType::UShort => try!(reader.read_u16::<B>()) as usize,
-                    PropertyType::Int => try!(reader.read_i32::<B>()) as usize,
-                    PropertyType::UInt => try!(reader.read_u32::<B>()) as usize,
-                    PropertyType::Float => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in PropertyType.")),
-                    PropertyType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in PropertyType.")),
-                    PropertyType::List(_,_) => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, List declared in PropertyType.")),
+                let count : usize = match *index_type {
+                    ScalarType::Char => try!(reader.read_i8()) as usize,
+                    ScalarType::UChar => try!(reader.read_u8()) as usize,
+                    ScalarType::Short => try!(reader.read_i16::<B>()) as usize,
+                    ScalarType::UShort => try!(reader.read_u16::<B>()) as usize,
+                    ScalarType::Int => try!(reader.read_i32::<B>()) as usize,
+                    ScalarType::UInt => try!(reader.read_u32::<B>()) as usize,
+                    ScalarType::Float => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
+                    ScalarType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
                 };
-                match **property_type {
-                    PropertyType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
-                    PropertyType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
-                    PropertyType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
-                    PropertyType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
-                    PropertyType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
-                    PropertyType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
-                    PropertyType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
-                    PropertyType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
-                    PropertyType::List(_, _) => return Err(Error::new(ErrorKind::InvalidInput, "List can not contain other lists."))
+                match *property_type {
+                    ScalarType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
+                    ScalarType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
+                    ScalarType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
+                    ScalarType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
+                    ScalarType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
+                    ScalarType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
+                    ScalarType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
+                    ScalarType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
                 }
             }
         };
@@ -487,10 +456,10 @@ mod tests {
         let p = Parser::new();
         let txt = "0 1 2 3";
         let mut prop = KeyMap::<PropertyDef>::new();
-        prop.add(PropertyDef::new("a".to_string(), PropertyType::Char));
-        prop.add(PropertyDef::new("b".to_string(), PropertyType::UChar));
-        prop.add(PropertyDef::new("c".to_string(), PropertyType::Short));
-        prop.add(PropertyDef::new("d".to_string(), PropertyType::UShort));
+        prop.add(PropertyDef::new("a".to_string(), PropertyType::Scalar(ScalarType::Char)));
+        prop.add(PropertyDef::new("b".to_string(), PropertyType::Scalar(ScalarType::UChar)));
+        prop.add(PropertyDef::new("c".to_string(), PropertyType::Scalar(ScalarType::Short)));
+        prop.add(PropertyDef::new("d".to_string(), PropertyType::Scalar(ScalarType::UShort)));
         let mut elem_def = ElementDef::new("dummy".to_string(), 0);
         elem_def.properties = prop;
 
@@ -562,14 +531,14 @@ mod tests {
     fn property_ok() {
         assert_ok!(
             g::property("property char c"),
-            PropertyDef::new("c".to_string(), PropertyType::Char)
+            PropertyDef::new("c".to_string(), PropertyType::Scalar(ScalarType::Char))
         );
     }
     #[test]
     fn property_list_ok() {
         assert_ok!(
             g::property("property list uchar int c"),
-            PropertyDef::new("c".to_string(), PropertyType::List(Box::new(PropertyType::UChar), Box::new(PropertyType::Int)))
+            PropertyDef::new("c".to_string(), PropertyType::List(ScalarType::UChar, ScalarType::Int))
         );
     }
     #[test]

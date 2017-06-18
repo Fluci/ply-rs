@@ -38,7 +38,7 @@ fn create_min() -> Ply {
 
 fn create_basic_header() -> Ply {
     let mut ply = Ply::new();
-    let p = PropertyDef::new("x".to_string(), PropertyType::Int);
+    let p = PropertyDef::new("x".to_string(), PropertyType::Scalar(ScalarType::Int));
     let mut e = ElementDef::new("point".to_string(), 0);
     e.properties.add(p);
     let c = "Hi, I'm your friendly comment.".to_string();
@@ -54,9 +54,9 @@ fn create_single_elements() -> Ply {
     let mut ply = Ply::new();
 
     let mut e = ElementDef::new("point".to_string(), 2);
-    let p = PropertyDef::new("x".to_string(), PropertyType::Int);
+    let p = PropertyDef::new("x".to_string(), PropertyType::Scalar(ScalarType::Int));
     e.properties.add(p);
-    let p = PropertyDef::new("y".to_string(), PropertyType::UInt);
+    let p = PropertyDef::new("y".to_string(), PropertyType::Scalar(ScalarType::UInt));
     e.properties.add(p);
 
     let mut list = Vec::new();
@@ -69,6 +69,30 @@ fn create_single_elements() -> Ply {
     pe.insert("y".to_string(), Property::UInt(4));
     list.push(pe);
     ply.payload.insert("point".to_string(), list);
+
+    let c = "Hi, I'm your friendly comment.".to_string();
+    let oi = "And I'm your object information.".to_string();
+    ply.header.elements.add(e);
+    ply.header.comments.push(c);
+    ply.header.obj_infos.push(oi);
+    assert!(ply.make_consistent().is_ok());
+    ply
+}
+fn create_list_elements() -> Ply {
+    let mut ply = Ply::new();
+
+    let mut e = ElementDef::new("aList".to_string(), 2);
+    let p = PropertyDef::new("x".to_string(), PropertyType::List(ScalarType::Int, ScalarType::Int));
+    e.properties.add(p);
+
+    let mut list = Vec::new();
+    let mut pe = KeyMap::new();
+    pe.insert("x".to_string(), Property::ListInt(vec![-7, 17, 38]));
+    list.push(pe);
+    let mut pe = KeyMap::new();
+    pe.insert("x".to_string(), Property::ListInt(vec![13, -19, 8, 33]));
+    list.push(pe);
+    ply.payload.insert("aList".to_string(), list);
 
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
@@ -94,6 +118,12 @@ fn write_basic_header() {
 #[test]
 fn write_single_elements() {
     let ply = create_single_elements();
+    let new_ply = read_write_ply(&ply);
+    assert_eq!(ply, new_ply);
+}
+#[test]
+fn write_list_elements() {
+    let ply = create_list_elements();
     let new_ply = read_write_ply(&ply);
     assert_eq!(ply, new_ply);
 }
