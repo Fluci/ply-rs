@@ -1,15 +1,15 @@
-use std;
 use std::io::{ Read, BufReader, BufRead, Result, Error, ErrorKind };
 use std::fmt::Debug;
-use std::slice::Iter;
-use std::str::FromStr;
 use std::result;
 
-use byteorder::{ BigEndian, LittleEndian, ReadBytesExt, ByteOrder };
+use byteorder::{ BigEndian, LittleEndian };
 
 use grammar;
 use ply::*;
 use util::LocationTracker;
+
+mod ascii;
+mod binary;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Line {
@@ -34,6 +34,7 @@ macro_rules! is_line {
         }
     );
 }
+
 
 fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(Error::new(
@@ -209,171 +210,6 @@ impl<E: PropertyAccess> Parser<E> {
             }
         }
         Ok(payload)
-    }
-    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
-        let mut elems = Vec::<E>::new();
-        let mut line_str = String::new();
-        for _ in 0..element_def.count {
-            line_str.clear();
-            try!(reader.read_line(&mut line_str));
-
-            let element = match self.__read_ascii_element(&line_str, element_def) {
-                Ok(e) => e,
-                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couln't read element line.")
-            };
-            elems.push(element);
-            location.next_line();
-        }
-        Ok(elems)
-    }
-    fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
-        let elems = match grammar::data_line(line) {
-            Ok(e) => e,
-            Err(ref e) => return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    format!("Couldn't parse element line.\n\tString: '{}'\n\tError: {}", line, e)
-                )),
-        };
-
-        let mut elem_it : Iter<String> = elems.iter();
-        let mut vals = E::new();
-        for (k, p) in &element_def.properties {
-            let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
-            vals.set_property(k.clone(), new_p);
-        }
-        Ok(vals)
-    }
-    fn __read_ascii_property(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
-        let s : &String = match elem_iter.next() {
-            None => return Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("Expected element of type '{:?}', but found nothing.", data_type)
-            )),
-            Some(x) => x
-        };
-
-        let result = match *data_type {
-            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
-                ScalarType::Char => Property::Char(try!(self.parse(s))),
-                ScalarType::UChar => Property::UChar(try!(self.parse(s))),
-                ScalarType::Short => Property::Short(try!(self.parse(s))),
-                ScalarType::UShort => Property::UShort(try!(self.parse(s))),
-                ScalarType::Int => Property::Int(try!(self.parse(s))),
-                ScalarType::UInt => Property::UInt(try!(self.parse(s))),
-                ScalarType::Float => Property::Float(try!(self.parse(s))),
-                ScalarType::Double => Property::Double(try!(self.parse(s))),
-            },
-            PropertyType::List(_, ref scalar_type) => {
-                let count : usize = try!(self.parse(s));
-                match *scalar_type {
-                    ScalarType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
-                }
-            }
-        };
-        Ok(result)
-    }
-
-    fn parse<D: FromStr>(&self, s: &str) -> Result<D>
-    where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
-        let v = s.parse();
-        match v {
-            Ok(r) => Ok(r),
-            Err(e) => Err(Error::new(ErrorKind::InvalidInput,
-                format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
-        }
-    }
-    fn __read_ascii_list<D: FromStr>(&self, elem_iter: &mut Iter<String>, count: usize) -> Result<Vec<D>>
-        where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
-        let mut list = Vec::<D>::new();
-        for i in 0..count {
-            let s : &String = match elem_iter.next() {
-                None => return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    format!("Couldn't find a list element at index {}.", i)
-                )),
-                Some(x) => x
-            };
-            let value : D = try!(self.parse(s));
-            list.push(value);
-        }
-        Ok(list)
-    }
-    fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
-        let mut elems = Vec::<E>::new();
-        for _ in 0..element_def.count {
-            let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
-            elems.push(element);
-            location.next_line();
-        }
-        Ok(elems)
-    }
-    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
-        let mut raw_element = E::new();
-
-        for (k, p) in &element_def.properties {
-            let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
-            raw_element.set_property(k.clone(), property);
-        }
-        Ok(raw_element)
-    }
-    fn __read_binary_property<T: Read, B: ByteOrder>(&self, reader: &mut T, data_type: &PropertyType) -> Result<Property> {
-        let result = match *data_type {
-            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
-                ScalarType::Char => Property::Char(try!(reader.read_i8())),
-                ScalarType::UChar => Property::UChar(try!(reader.read_u8())),
-                ScalarType::Short => Property::Short(try!(reader.read_i16::<B>())),
-                ScalarType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
-                ScalarType::Int => Property::Int(try!(reader.read_i32::<B>())),
-                ScalarType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
-                ScalarType::Float => Property::Float(try!(reader.read_f32::<B>())),
-                ScalarType::Double => Property::Double(try!(reader.read_f64::<B>())),
-            },
-            PropertyType::List(ref index_type, ref property_type) => {
-                let count : usize = match *index_type {
-                    ScalarType::Char => try!(reader.read_i8()) as usize,
-                    ScalarType::UChar => try!(reader.read_u8()) as usize,
-                    ScalarType::Short => try!(reader.read_i16::<B>()) as usize,
-                    ScalarType::UShort => try!(reader.read_u16::<B>()) as usize,
-                    ScalarType::Int => try!(reader.read_i32::<B>()) as usize,
-                    ScalarType::UInt => try!(reader.read_u32::<B>()) as usize,
-                    ScalarType::Float => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
-                    ScalarType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
-                };
-                match *property_type {
-                    ScalarType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
-                    ScalarType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
-                    ScalarType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
-                    ScalarType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
-                    ScalarType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
-                    ScalarType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
-                    ScalarType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
-                    ScalarType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
-                }
-            }
-        };
-        Ok(result)
-    }
-    fn __read_binary_list<T: Read, D: FromStr>(&self, reader: &mut T, read_from: &Fn(&mut T) -> Result<D>, count: usize) -> Result<Vec<D>>
-        where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
-        let mut list = Vec::<D>::new();
-        for i in 0..count {
-            let value : D = match read_from(reader) {
-                Err(e) => return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    format!("Couldn't find a list element at index {}.\n\tError: {:?}", i, e)
-                )),
-                Ok(x) => x
-            };
-            list.push(value);
-        }
-        Ok(list)
     }
 }
 
