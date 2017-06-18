@@ -312,6 +312,7 @@ impl<P: PropertyAccess> Parser<P> {
         for _ in 0..element_def.count {
             let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
             elems.push(element);
+            location.next_line();
         }
         Ok(elems)
     }
