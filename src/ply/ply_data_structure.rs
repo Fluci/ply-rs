@@ -2,13 +2,35 @@ use std::fmt::{ Display, Formatter };
 use std::fmt;
 use super::PropertyType;
 use super::KeyMap;
+use super::PropertyAccess;
 
+/// Models all necessary information to interact with a PLY file.
+///
+/// The generic parameter `E` is the element type used to store the payload data.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Ply<E> {
+pub struct Ply<E: PropertyAccess> {
+    /// All header information found in a PLY file.
     pub header: Header,
-    pub payload: KeyMap<Vec<E>>
+    /// The payloud found after the `end_header` line in a PLY file.
+    ///
+    /// One line in an ascii PLY file corresponds to a single element.
+    /// The payload groups elments with the same type together in a vector.
+    ///
+    /// # Examples
+    ///
+    /// Assume you have a `Ply` object called `ply` and want to access the third `point` element:
+    ///
+    /// ```rust,no_run
+    /// # use ply_rs::ply::{Ply, DefaultElement};
+    /// # let ply = Ply::<DefaultElement>::new();
+    /// // get ply from somewhere ...
+    /// let ref a_point = ply.payload["point"][2];
+    /// let ref a_point_x = ply.payload["point"][2]["x"];
+    /// ```
+    pub payload: Payload<E>,
 }
-impl<E> Ply<E> {
+impl<E: PropertyAccess> Ply<E> {
+    /// Creates a new `Ply<E>`
     pub fn new() -> Self {
         Ply::<E> {
             header: Header::new(),
@@ -16,7 +38,6 @@ impl<E> Ply<E> {
         }
     }
 }
-
 
 /////// Header Types
 #[derive(Debug, PartialEq, Eq, Clone)]

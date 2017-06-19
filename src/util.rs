@@ -1,5 +1,5 @@
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct LocationTracker {
     pub line_index: usize
 }
