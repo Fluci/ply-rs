@@ -2,6 +2,11 @@
 name = "ply-rs"
 version = "0.1.0"
 authors = ["Felice Serena <felice@serena-mueller.ch>"]
+repository = "https://github.com/Fluci/ply-rs.git"
+repository = "https://github.com/Fluci/ply-rs"
+license = "MIT"
+readme = "README.md"
+description = "Library for reading/writing ascii and binary PLY files."
 build = "build.rs"
 
 [dependencies]
