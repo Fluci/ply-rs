@@ -295,7 +295,7 @@ mod tests {
         prop.add(PropertyDef::new("b".to_string(), PropertyType::Scalar(ScalarType::UChar)));
         prop.add(PropertyDef::new("c".to_string(), PropertyType::Scalar(ScalarType::Short)));
         prop.add(PropertyDef::new("d".to_string(), PropertyType::Scalar(ScalarType::UShort)));
-        let mut elem_def = ElementDef::new("dummy".to_string(), 0);
+        let mut elem_def = ElementDef::new("dummy".to_string());
         elem_def.properties = prop;
 
         let properties = p.read_ascii_element(&txt, &elem_def);
@@ -353,9 +353,11 @@ mod tests {
     }
     #[test]
     fn element_ok() {
+        let mut e = ElementDef::new("vertex".to_string());
+        e.count = 8;
         assert_ok!(
             g::element("element vertex 8"),
-            ElementDef::new("vertex".to_string(), 8)
+            e
         );
     }
     #[test]

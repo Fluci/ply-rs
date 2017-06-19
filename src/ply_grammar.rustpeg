@@ -65,7 +65,9 @@ pub obj_info -> ObjInfo
 
 pub element -> ElementDef
 	= "element" space id:$(ident) space n:uint {
-		ElementDef::new(id.to_string(), n as usize)
+		let mut e = ElementDef::new(id.to_string());
+		e.count = n as usize;
+		e
 	}
 
 pub property -> PropertyDef

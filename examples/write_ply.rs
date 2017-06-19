@@ -15,7 +15,7 @@ fn main() {
 
         // Define the elements we want to write. In our case we write a 2D Point.
         // When writing, the `count` will be set automatically to the correct value by calling `make_consistent`
-        let mut point_element = ElementDef::new("point".to_string(), 0);
+        let mut point_element = ElementDef::new("point".to_string());
         let p = PropertyDef::new("x".to_string(), PropertyType::Scalar(ScalarType::Float));
         point_element.properties.add(p);
         let p = PropertyDef::new("y".to_string(), PropertyType::Scalar(ScalarType::Float));

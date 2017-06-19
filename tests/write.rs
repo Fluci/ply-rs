@@ -39,7 +39,7 @@ fn create_min() -> Ply {
 fn create_basic_header() -> Ply {
     let mut ply = Ply::new();
     let p = PropertyDef::new("x".to_string(), PropertyType::Scalar(ScalarType::Int));
-    let mut e = ElementDef::new("point".to_string(), 0);
+    let mut e = ElementDef::new("point".to_string());
     e.properties.add(p);
     let c = "Hi, I'm your friendly comment.".to_string();
     let oi = "And I'm your object information.".to_string();
@@ -53,7 +53,7 @@ fn create_basic_header() -> Ply {
 fn create_single_elements() -> Ply {
     let mut ply = Ply::new();
 
-    let mut e = ElementDef::new("point".to_string(), 2);
+    let mut e = ElementDef::new("point".to_string());
     let p = PropertyDef::new("x".to_string(), PropertyType::Scalar(ScalarType::Int));
     e.properties.add(p);
     let p = PropertyDef::new("y".to_string(), PropertyType::Scalar(ScalarType::UInt));
@@ -81,7 +81,7 @@ fn create_single_elements() -> Ply {
 fn create_list_elements() -> Ply {
     let mut ply = Ply::new();
 
-    let mut e = ElementDef::new("aList".to_string(), 2);
+    let mut e = ElementDef::new("aList".to_string());
     let p = PropertyDef::new("x".to_string(), PropertyType::List(ScalarType::Int, ScalarType::Int));
     e.properties.add(p);
 
