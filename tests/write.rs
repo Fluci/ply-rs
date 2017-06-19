@@ -14,8 +14,8 @@ fn read_buff<T: Read>(mut buf: &mut T) -> Ply {
 
 fn write_buff(ply: &Ply) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
-    let mut w = writer::Writer::new();
-    w.write_ply(&mut buf, ply).unwrap();
+    let w = writer::Writer::new();
+    w.write_ply_unchecked(&mut buf, ply).unwrap();
     buf
 }
 

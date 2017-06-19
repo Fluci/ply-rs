@@ -37,7 +37,15 @@ impl<E: PropertyAccess> Writer<E> {
     }
     // TODO: think about masking and valid/invalid symbols
     // TODO: make consistency check
-    pub fn write_ply<T: Write>(&mut self, out: &mut T, ply: &Ply<E>) -> Result<usize> {
+    pub fn write_ply<T: Write>(&self, out: &mut T, ply: &mut Ply<E>) -> Result<usize> {
+        match ply.make_consistent() {
+            Ok(()) => (),
+            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, format!("The given ply isn't consistent: {:?}", e))),
+        };
+        self.write_ply_unchecked(out, ply)
+    }
+    /// like `write_ply` but doesn't modify the input in case of inconsistency. It also doesn't check for it to be consistent.
+    pub fn write_ply_unchecked<T: Write>(&self, out: &mut T, ply: &Ply<E>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_header(out, &ply.header));
         written += try!(self.write_payload(out, &ply.payload, &ply.header));
@@ -94,13 +102,13 @@ impl<E: PropertyAccess> Writer<E> {
         }
         Ok(written)
     }
-    pub fn write_line_end_header<T: Write>(&mut self, out: &mut T) -> Result<usize> {
+    pub fn write_line_end_header<T: Write>(&self, out: &mut T) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("end_header".as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
-    pub fn write_header<T: Write>(&mut self, out: &mut T, header: &Header) -> Result<usize> {
+    pub fn write_header<T: Write>(&self, out: &mut T, header: &Header) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_magic_number(out));
         written += try!(self.write_line_format(out, &header.encoding, &header.version));
@@ -154,7 +162,7 @@ impl<E: PropertyAccess> Writer<E> {
         }
     }
     ///// Payload
-    pub fn write_payload<T: Write>(&mut self, out: &mut T, payload: &Payload<E>, header: &Header) -> Result<usize> {
+    pub fn write_payload<T: Write>(&self, out: &mut T, payload: &Payload<E>, header: &Header) -> Result<usize> {
         let mut written = 0;
         let element_defs = &header.elements;
         for (k, element_list) in payload {
@@ -163,7 +171,7 @@ impl<E: PropertyAccess> Writer<E> {
         }
         Ok(written)
     }
-    pub fn write_payload_of_element<T: Write>(&mut self, out: &mut T, element_list: &Vec<E>, element_def: &ElementDef, header: &Header) -> Result<usize> {
+    pub fn write_payload_of_element<T: Write>(&self, out: &mut T, element_list: &Vec<E>, element_def: &ElementDef, header: &Header) -> Result<usize> {
         let mut written = 0;
         match header.encoding {
             Encoding::Ascii => for element in element_list {

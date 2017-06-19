@@ -10,12 +10,22 @@ byteorder = "1.0.0"
 
 [build-dependencies]
 peg = "0.5.3"
+skeptic = "0.9"
+
+[dev-dependencies]
+skeptic = "0.9"
 
 [[example]]
 name = "read_ply"
+
+[[example]]
+name = "write_ply"
 
 [[example]]
 name = "read_ply_header_only"
 
 [[example]]
 name = "read_ply_to_structs"
+
+[[example]]
+name = "write_empty_ply"
