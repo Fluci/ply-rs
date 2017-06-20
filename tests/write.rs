@@ -27,6 +27,8 @@ fn read_write_ply(ply: &Ply) -> Ply {
     let mut buff = BufReader::new(&(*ve));
     let new_ply = read_buff(&mut buff);
     println!("read ply:\n{:?}", new_ply);
+    assert_eq!(ply.header, new_ply.header);
+    assert_eq!(ply.payload, new_ply.payload);
     new_ply
 }
 

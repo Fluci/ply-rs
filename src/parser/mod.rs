@@ -285,10 +285,11 @@ impl<E: PropertyAccess> Parser<E> {
     ///
     /// Make sure to read the elements in the order as they are defined in the header.
     pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
         match header.encoding {
-            Encoding::Ascii => self.read_ascii_payload_for_element(reader, element_def),
-            Encoding::BinaryBigEndian => self.read_big_endian_payload_for_element(reader, element_def),
-            Encoding::BinaryLittleEndian => self.read_little_endian_payload_for_element(reader, element_def),
+            Encoding::Ascii => self.__read_ascii_payload_for_element(reader, &mut location, element_def),
+            Encoding::BinaryBigEndian => self.__read_big_endian_payload_for_element(reader, &mut location, element_def),
+            Encoding::BinaryLittleEndian => self.__read_little_endian_payload_for_element(reader, &mut location, element_def),
         }
     }
     /// internal dispatcher based on the encoding
@@ -337,13 +338,6 @@ use std::marker;
 
 /// # Ascii
 impl<E: PropertyAccess> Parser<E> {
-    /// Assume the elements to be encoded in ascii format.
-    ///
-    /// Make sure all elements are parsed in the order they are defined in the header.
-    pub fn read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
-        let mut location = LocationTracker::new();
-        self.__read_ascii_payload_for_element(reader, &mut location, element_def)
-    }
     fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
         let mut elems = Vec::<E>::new();
         let mut line_str = String::new();
@@ -475,16 +469,6 @@ impl<E: PropertyAccess> Parser<E> {
     pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
         /// Reduce coupling with ByteOrder
         self.__read_binary_element::<T, LittleEndian>(reader, element_def)
-    }
-    /// Reads list of elements as declared in èlement_def. Assumes big endian encoding.
-    pub fn read_big_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
-        let mut location = LocationTracker::new();
-        self.__read_binary_payload_for_element::<T, BigEndian>(reader, &mut location, element_def)
-    }
-    /// Reads list of elements as declared in èlement_def. Assumes big endian encoding.
-    pub fn read_little_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
-        let mut location = LocationTracker::new();
-        self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def)
     }
 
     /// internal wrapper
