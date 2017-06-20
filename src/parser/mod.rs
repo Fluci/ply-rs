@@ -1,9 +1,11 @@
 //! Reads ascii or binary data into a `Ply`.
 
 use std::io;
-use std::io::{ Read, BufReader, BufRead, Result, ErrorKind };
+use std::io::{ Read, BufReader };
 use std::fmt::Debug;
 use std::result;
+
+use std::io::{ BufRead, Result, ErrorKind };
 
 mod ply_grammar {
     use ply::{ PropertyDef, PropertyType, ScalarType, Encoding, Version, Comment, ObjInfo,ElementDef };
@@ -22,26 +24,7 @@ mod ply_grammar {
 
 use self::ply_grammar as grammar;
 use self::ply_grammar::Line;
-use ply::*;
 use util::LocationTracker;
-
-mod binary;
-mod ascii;
-
-
-macro_rules! is_line {
-    ($e:expr, $t:ty) => (
-        match $e {
-            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
-            Ok(l @ Line::MagicNumber) => (l),
-            Ok(ob) => return Err(io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("Invalid line encountered. Expected type: '$t', found: '{:?}'", ob)
-            )),
-        }
-    );
-}
-
 
 fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(io::Error::new(
@@ -107,7 +90,7 @@ use std::marker::PhantomData;
 /// let header = header.unwrap();
 ///
 /// // read the payload
-/// //let payload = p.read_payload(&mut buf_read, &header);
+/// let payload = p.read_payload(&mut buf_read, &header);
 /// // Did it work?
 /// let payload = payload.unwrap();
 ///
@@ -124,6 +107,12 @@ pub struct Parser<E: PropertyAccess> {
       phantom: PhantomData<E>,
 }
 
+
+//use std::marker::PhantomData;
+//use std::io::{ Read, BufReader };
+use ply::Ply;
+use ply::{ Header, Payload, Encoding };
+
 impl<E: PropertyAccess> Parser<E> {
     /// Creates a new `Parser<E>`, where `E` is the type to store the element data in.
     ///
@@ -133,6 +122,7 @@ impl<E: PropertyAccess> Parser<E> {
             phantom: PhantomData
         }
     }
+
     /// Expects the complete content of a PLY file.
     ///
     /// A PLY file starts with "ply\n". `read_ply` reads until all elements have been read as
@@ -147,6 +137,25 @@ impl<E: PropertyAccess> Parser<E> {
         ply.payload = payload;
         Ok(ply)
     }
+}
+
+// use ply::{ Header, Encoding };
+use ply::{ PropertyAccess, Version, ObjInfo, Comment, ElementDef, KeyMap, Addable };
+/*
+use util::LocationTracker;
+use super::Parser;
+use super::Line;
+use super::grammar;
+use super::{parse_ascii_error, parse_ascii_rethrow};
+use std::io;
+use std::io::{ BufRead, ErrorKind, Result };
+use std::result;
+// */
+
+// ////////////////////////
+/// #Header
+// ////////////////////////
+impl<E: PropertyAccess> Parser<E> {
     /// Reads header until and inclusive `end_header`.
     ///
     /// A ply file starts with "ply\n". The header and the payload are separated by a line `end_header\n`.
@@ -164,13 +173,6 @@ impl<E: PropertyAccess> Parser<E> {
             )),
         }
     }
-    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<E>> {
-        match header.encoding {
-            Encoding::Ascii => self.read_ascii_payload_for_element(reader, element_def),
-            Encoding::BinaryBigEndian => self.read_big_endian_payload_for_element(reader, element_def),
-            Encoding::BinaryLittleEndian => self.read_little_endian_payload_for_element(reader, element_def),
-        }
-    }
 
     // private
     fn __read_header_line(&self, line_str: &str) -> result::Result<Line, grammar::ParseError> {
@@ -185,7 +187,14 @@ impl<E: PropertyAccess> Parser<E> {
             Ok(l) => return parse_ascii_error(location, &line_str, &format!("Expected magic number 'ply', but saw '{:?}'.", l)),
             Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Expected magic number 'ply'.")
         }
-        is_line!(grammar::line(&line_str), Line::MagicNumber);
+        match grammar::line(&line_str) {
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
+            Ok(l @ Line::MagicNumber) => (l),
+            Ok(ob) => return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("Invalid line encountered. Expected type: 'Line::MagicNumber', found: '{:?}'", ob)
+            )),
+        };
 
         let mut header_form_ver : Option<(Encoding, Version)> = None;
         let mut header_obj_infos = Vec::<ObjInfo>::new();
@@ -260,24 +269,42 @@ impl<E: PropertyAccess> Parser<E> {
             elements: header_elements
         })
     }
+}
+
+// //////////////////////
+/// # Payload
+// //////////////////////
+
+impl<E: PropertyAccess> Parser<E> {
+    /// Reads payload. Encoding is chosen according to the encoding field in `header`.
     pub fn read_payload<T: BufRead>(&self, reader: &mut T, header: &Header) -> Result<Payload<E>> {
         let mut location = LocationTracker::new();
         self.__read_payload(reader, &mut location, header)
+    }
+    /// Reads entire list of elements from payload. Encoding is chosen according to `header`.
+    ///
+    /// Make sure to read the elements in the order as they are defined in the header.
+    pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<E>> {
+        match header.encoding {
+            Encoding::Ascii => self.read_ascii_payload_for_element(reader, element_def),
+            Encoding::BinaryBigEndian => self.read_big_endian_payload_for_element(reader, element_def),
+            Encoding::BinaryLittleEndian => self.read_little_endian_payload_for_element(reader, element_def),
+        }
     }
     /// internal dispatcher based on the encoding
     fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<E>> {
         let mut payload = Payload::new();
         match header.encoding {
             Encoding::Ascii => for (k, ref e) in &header.elements {
-                let elems = try!(self.read_ascii_payload_for_element(reader, /* TODO: location,*/ e));
+                let elems = try!(self.__read_ascii_payload_for_element(reader, location, e));
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryBigEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.read_big_endian_payload_for_element(reader, /* TODO: location,*/ e));
+                let elems = try!(self.__read_big_endian_payload_for_element(reader, location, e));
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryLittleEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.read_little_endian_payload_for_element(reader, /* TODO: location,*/ e));
+                let elems = try!(self.__read_little_endian_payload_for_element(reader, location, e));
                 payload.insert(k.clone(), elems);
             }
         }
@@ -286,10 +313,269 @@ impl<E: PropertyAccess> Parser<E> {
 }
 
 
+
+// ////////////////////////////////////////////////////////////////
+// # Ascii
+// ////////////////////////////////////////////////////////////////
+
+/*
+use std::io;
+use std::io::{ BufRead, Result, ErrorKind };
+use super::Parser;
+use super::grammar;
+use super::parse_ascii_rethrow;
+use util::LocationTracker;
+use ply::{ PropertyAccess, ElementDef };
+// */
+
+use std::slice::Iter;
+use std::str::FromStr;
+
+use ply::{ Property, PropertyType, ScalarType };
+use std::error;
+use std::marker;
+
+/// # Ascii
+impl<E: PropertyAccess> Parser<E> {
+    /// Assume the elements to be encoded in ascii format.
+    ///
+    /// Make sure all elements are parsed in the order they are defined in the header.
+    pub fn read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_ascii_payload_for_element(reader, &mut location, element_def)
+    }
+    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut elems = Vec::<E>::new();
+        let mut line_str = String::new();
+        for _ in 0..element_def.count {
+            line_str.clear();
+            try!(reader.read_line(&mut line_str));
+
+            let element = match self.read_ascii_element(&line_str, element_def) {
+                Ok(e) => e,
+                Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couln't read element line.")
+            };
+            elems.push(element);
+            location.next_line();
+        }
+        Ok(elems)
+    }
+    /// Read a single element. Assume it is encoded in ascii.
+    ///
+    /// Make sure all elements are parsed in the order they are defined in the header.
+    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
+        let elems = match grammar::data_line(line) {
+            Ok(e) => e,
+            Err(ref e) => return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't parse element line.\n\tString: '{}'\n\tError: {}", line, e)
+                )),
+        };
+
+        let mut elem_it : Iter<String> = elems.iter();
+        let mut vals = E::new();
+        for (k, p) in &element_def.properties {
+            let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
+            vals.set_property(k.clone(), new_p);
+        }
+        Ok(vals)
+    }
+    fn __read_ascii_property(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
+        let s : &String = match elem_iter.next() {
+            None => return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("Expected element of type '{:?}', but found nothing.", data_type)
+            )),
+            Some(x) => x
+        };
+
+        let result = match *data_type {
+            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
+                ScalarType::Char => Property::Char(try!(self.parse(s))),
+                ScalarType::UChar => Property::UChar(try!(self.parse(s))),
+                ScalarType::Short => Property::Short(try!(self.parse(s))),
+                ScalarType::UShort => Property::UShort(try!(self.parse(s))),
+                ScalarType::Int => Property::Int(try!(self.parse(s))),
+                ScalarType::UInt => Property::UInt(try!(self.parse(s))),
+                ScalarType::Float => Property::Float(try!(self.parse(s))),
+                ScalarType::Double => Property::Double(try!(self.parse(s))),
+            },
+            PropertyType::List(_, ref scalar_type) => {
+                let count : usize = try!(self.parse(s));
+                match *scalar_type {
+                    ScalarType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
+                }
+            }
+        };
+        Ok(result)
+    }
+
+    fn parse<D: FromStr>(&self, s: &str) -> Result<D>
+    where <D as FromStr>::Err: error::Error + Send + Sync + 'static {
+        let v = s.parse();
+        match v {
+            Ok(r) => Ok(r),
+            Err(e) => Err(io::Error::new(ErrorKind::InvalidInput,
+                format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
+        }
+    }
+    fn __read_ascii_list<D: FromStr>(&self, elem_iter: &mut Iter<String>, count: usize) -> Result<Vec<D>>
+        where <D as FromStr>::Err: error::Error + marker::Send + marker::Sync + 'static {
+        let mut list = Vec::<D>::new();
+        for i in 0..count {
+            let s : &String = match elem_iter.next() {
+                None => return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't find a list element at index {}.", i)
+                )),
+                Some(x) => x
+            };
+            let value : D = try!(self.parse(s));
+            list.push(value);
+        }
+        Ok(list)
+    }
+}
+
+// //////////////////////////////////////
+// # Binary
+// //////////////////////////////////////
+/*
+use std::io;
+use std::io::{ Read, Result, ErrorKind };
+use std::str::FromStr;
+use std::error;
+use std::marker;
+use ply::{ PropertyAccess, ElementDef, PropertyType, Property, ScalarType };
+use util::LocationTracker;
+use super::Parser;
+*/
+use byteorder::{ BigEndian, LittleEndian, ReadBytesExt, ByteOrder };
+
+
+/// # Binary
+impl<E: PropertyAccess> Parser<E> {
+    /// Reads a single element as declared in èlement_def. Assumes big endian encoding.
+    ///
+    /// Make sure all elements are parsed in the order they are defined in the header.
+    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        /// Reduce coupling with ByteOrder
+        self.__read_binary_element::<T, BigEndian>(reader, element_def)
+    }
+    /// Reads a single element as declared in èlement_def. Assumes big endian encoding.
+    ///
+    /// Make sure all elements are parsed in the order they are defined in the header.
+    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        /// Reduce coupling with ByteOrder
+        self.__read_binary_element::<T, LittleEndian>(reader, element_def)
+    }
+    /// Reads list of elements as declared in èlement_def. Assumes big endian encoding.
+    pub fn read_big_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_binary_payload_for_element::<T, BigEndian>(reader, &mut location, element_def)
+    }
+    /// Reads list of elements as declared in èlement_def. Assumes big endian encoding.
+    pub fn read_little_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def)
+    }
+
+    /// internal wrapper
+    /// TODO: is there a way to put the binary and ascii parts in their own files?
+    fn __read_big_endian_payload_for_element<T: Read>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        self.__read_binary_payload_for_element::<T, BigEndian>(reader, location, element_def)
+    }
+    fn __read_little_endian_payload_for_element<T: Read>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        self.__read_binary_payload_for_element::<T, LittleEndian>(reader, location, element_def)
+    }
+
+    fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut elems = Vec::<E>::new();
+        for _ in 0..element_def.count {
+            let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
+            elems.push(element);
+            location.next_line();
+        }
+        Ok(elems)
+    }
+    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        let mut raw_element = E::new();
+
+        for (k, p) in &element_def.properties {
+            let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
+            raw_element.set_property(k.clone(), property);
+        }
+        Ok(raw_element)
+    }
+    fn __read_binary_property<T: Read, B: ByteOrder>(&self, reader: &mut T, data_type: &PropertyType) -> Result<Property> {
+        let result = match *data_type {
+            PropertyType::Scalar(ref scalar_type) => match *scalar_type {
+                ScalarType::Char => Property::Char(try!(reader.read_i8())),
+                ScalarType::UChar => Property::UChar(try!(reader.read_u8())),
+                ScalarType::Short => Property::Short(try!(reader.read_i16::<B>())),
+                ScalarType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
+                ScalarType::Int => Property::Int(try!(reader.read_i32::<B>())),
+                ScalarType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
+                ScalarType::Float => Property::Float(try!(reader.read_f32::<B>())),
+                ScalarType::Double => Property::Double(try!(reader.read_f64::<B>())),
+            },
+            PropertyType::List(ref index_type, ref property_type) => {
+                let count : usize = match *index_type {
+                    ScalarType::Char => try!(reader.read_i8()) as usize,
+                    ScalarType::UChar => try!(reader.read_u8()) as usize,
+                    ScalarType::Short => try!(reader.read_i16::<B>()) as usize,
+                    ScalarType::UShort => try!(reader.read_u16::<B>()) as usize,
+                    ScalarType::Int => try!(reader.read_i32::<B>()) as usize,
+                    ScalarType::UInt => try!(reader.read_u32::<B>()) as usize,
+                    ScalarType::Float => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
+                    ScalarType::Double => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
+                };
+                match *property_type {
+                    ScalarType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
+                    ScalarType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
+                    ScalarType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
+                    ScalarType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
+                    ScalarType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
+                    ScalarType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
+                    ScalarType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
+                    ScalarType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
+                }
+            }
+        };
+        Ok(result)
+    }
+    fn __read_binary_list<T: Read, D: FromStr>(&self, reader: &mut T, read_from: &Fn(&mut T) -> Result<D>, count: usize) -> Result<Vec<D>>
+        where <D as FromStr>::Err: error::Error + marker::Send + marker::Sync + 'static {
+        let mut list = Vec::<D>::new();
+        for i in 0..count {
+            let value : D = match read_from(reader) {
+                Err(e) => return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!("Couldn't find a list element at index {}.\n\tError: {:?}", i, e)
+                )),
+                Ok(x) => x
+            };
+            list.push(value);
+        }
+        Ok(list)
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests {
     use super::grammar as g;
-    use super::*;
+    use super::Line;
+    use parser::Parser;
+    use ply::{ DefaultElement, PropertyDef, Version, Encoding, ScalarType, PropertyType, ElementDef, KeyMap, Addable };
     macro_rules! assert_ok {
         ($e:expr) => (
             match $e {
