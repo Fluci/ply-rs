@@ -1,23 +1,34 @@
-use std;
-use std::io::{ BufRead, Result, Error, ErrorKind };
+
+// ////////////////////////////////////////////////////////////////
+// Ascii
+// ////////////////////////////////////////////////////////////////
+
 use std::slice::Iter;
 use std::str::FromStr;
 
-use grammar;
 use ply::{ PropertyAccess, ElementDef, Property, PropertyType, ScalarType };
-use util::LocationTracker;
+use std::io;
+use std::io::{ BufRead, Result, ErrorKind };
+use std::error;
+use std::marker;
 use super::Parser;
+use super::grammar;
 use super::parse_ascii_rethrow;
+use util::LocationTracker;
 
 impl<E: PropertyAccess> Parser<E> {
-    pub fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
+    pub fn read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_ascii_payload_for_element(reader, &mut location, element_def)
+    }
+    fn __read_ascii_payload_for_element<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
         let mut elems = Vec::<E>::new();
         let mut line_str = String::new();
         for _ in 0..element_def.count {
             line_str.clear();
             try!(reader.read_line(&mut line_str));
 
-            let element = match self.__read_ascii_element(&line_str, element_def) {
+            let element = match self.read_ascii_element(&line_str, element_def) {
                 Ok(e) => e,
                 Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couln't read element line.")
             };
@@ -26,10 +37,10 @@ impl<E: PropertyAccess> Parser<E> {
         }
         Ok(elems)
     }
-    pub fn __read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
+    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
         let elems = match grammar::data_line(line) {
             Ok(e) => e,
-            Err(ref e) => return Err(Error::new(
+            Err(ref e) => return Err(io::Error::new(
                     ErrorKind::InvalidInput,
                     format!("Couldn't parse element line.\n\tString: '{}'\n\tError: {}", line, e)
                 )),
@@ -45,7 +56,7 @@ impl<E: PropertyAccess> Parser<E> {
     }
     fn __read_ascii_property(&self, elem_iter: &mut Iter<String>, data_type: &PropertyType) -> Result<Property> {
         let s : &String = match elem_iter.next() {
-            None => return Err(Error::new(
+            None => return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Expected element of type '{:?}', but found nothing.", data_type)
             )),
@@ -81,20 +92,20 @@ impl<E: PropertyAccess> Parser<E> {
     }
 
     fn parse<D: FromStr>(&self, s: &str) -> Result<D>
-    where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+    where <D as FromStr>::Err: error::Error + Send + Sync + 'static {
         let v = s.parse();
         match v {
             Ok(r) => Ok(r),
-            Err(e) => Err(Error::new(ErrorKind::InvalidInput,
+            Err(e) => Err(io::Error::new(ErrorKind::InvalidInput,
                 format!("Parse error.\n\tValue: '{}'\n\tError: {:?}, ", s, e))),
         }
     }
     fn __read_ascii_list<D: FromStr>(&self, elem_iter: &mut Iter<String>, count: usize) -> Result<Vec<D>>
-        where <D as FromStr>::Err: std::error::Error + std::marker::Send + std::marker::Sync + 'static {
+        where <D as FromStr>::Err: error::Error + marker::Send + marker::Sync + 'static {
         let mut list = Vec::<D>::new();
         for i in 0..count {
             let s : &String = match elem_iter.next() {
-                None => return Err(Error::new(
+                None => return Err(io::Error::new(
                     ErrorKind::InvalidInput,
                     format!("Couldn't find a list element at index {}.", i)
                 )),

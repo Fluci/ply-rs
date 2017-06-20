@@ -1,15 +1,32 @@
-use std::io::{ Read, Result, Error, ErrorKind };
+use std::io;
+use std::io::{ Read, Result, ErrorKind };
 use std::str::FromStr;
 use std::error;
 use std::marker;
 
-use byteorder::{ ReadBytesExt, ByteOrder };
+use byteorder::{ BigEndian, LittleEndian, ReadBytesExt, ByteOrder };
 use ply::{ PropertyAccess, ElementDef, PropertyType, Property, ScalarType };
 
 use util::LocationTracker;
 use super::Parser;
 
 impl<E: PropertyAccess> Parser<E> {
+    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        /// Reduce coupling with ByteOrder
+        self.__read_binary_element::<T, BigEndian>(reader, element_def)
+    }
+    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+        /// Reduce coupling with ByteOrder
+        self.__read_binary_element::<T, LittleEndian>(reader, element_def)
+    }
+    pub fn read_big_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_binary_payload_for_element::<T, BigEndian>(reader, &mut location, element_def)
+    }
+    pub fn read_little_endian_payload_for_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<Vec<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def)
+    }
     pub fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
         let mut elems = Vec::<E>::new();
         for _ in 0..element_def.count {
@@ -19,7 +36,7 @@ impl<E: PropertyAccess> Parser<E> {
         }
         Ok(elems)
     }
-    pub fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
+    fn __read_binary_element<T: Read, B: ByteOrder>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
         let mut raw_element = E::new();
 
         for (k, p) in &element_def.properties {
@@ -48,8 +65,8 @@ impl<E: PropertyAccess> Parser<E> {
                     ScalarType::UShort => try!(reader.read_u16::<B>()) as usize,
                     ScalarType::Int => try!(reader.read_i32::<B>()) as usize,
                     ScalarType::UInt => try!(reader.read_u32::<B>()) as usize,
-                    ScalarType::Float => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
-                    ScalarType::Double => return Err(Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
+                    ScalarType::Float => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
+                    ScalarType::Double => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
                 };
                 match *property_type {
                     ScalarType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
@@ -70,7 +87,7 @@ impl<E: PropertyAccess> Parser<E> {
         let mut list = Vec::<D>::new();
         for i in 0..count {
             let value : D = match read_from(reader) {
-                Err(e) => return Err(Error::new(
+                Err(e) => return Err(io::Error::new(
                     ErrorKind::InvalidInput,
                     format!("Couldn't find a list element at index {}.\n\tError: {:?}", i, e)
                 )),

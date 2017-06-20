@@ -7,7 +7,6 @@ use byteorder::{ BigEndian, LittleEndian, WriteBytesExt, ByteOrder };
 
 
 macro_rules! get_prop(
-    // TODO: errror
     ($e:expr) => (match $e {None => return Err(Error::new(ErrorKind::InvalidInput, "No property available for given key.")), Some(x) => x})
 );
 

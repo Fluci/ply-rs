@@ -3,9 +3,6 @@
 pub number -> String
 	= n:$([0-9]+) { n.to_string() }
 
-use super::ply::*;
-use super::parser::*;
-
 space = [ \t]+
 
 uint -> u64

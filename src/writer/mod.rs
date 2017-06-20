@@ -1,4 +1,4 @@
-
+//! Writes ascii or binary data from a `Ply` to a `Write` trait.
 
 use std::io::{ Write, Result, Error, ErrorKind };
 use std::string::ToString;

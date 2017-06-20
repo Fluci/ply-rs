@@ -1,35 +1,40 @@
 //! Reads ascii or binary data into a `Ply`.
 
-use std::io::{ Read, BufReader, BufRead, Result, Error, ErrorKind };
+use std::io;
+use std::io::{ Read, BufReader, BufRead, Result, ErrorKind };
 use std::fmt::Debug;
 use std::result;
 
-use byteorder::{ BigEndian, LittleEndian };
+mod ply_grammar {
+    use ply::{ PropertyDef, PropertyType, ScalarType, Encoding, Version, Comment, ObjInfo,ElementDef };
+    #[derive(Debug, PartialEq, Clone)]
+    pub enum Line {
+        MagicNumber,
+        Format((Encoding, Version)),
+        Comment(Comment),
+        ObjInfo(ObjInfo),
+        Element(ElementDef),
+        Property(PropertyDef),
+        EndHeader
+    }
+    include!(concat!(env!("OUT_DIR"), "/ply_grammar.rs"));
+}
 
-use grammar;
+use self::ply_grammar as grammar;
+use self::ply_grammar::Line;
 use ply::*;
 use util::LocationTracker;
 
-mod ascii;
 mod binary;
+mod ascii;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Line {
-    MagicNumber,
-    Format((Encoding, Version)),
-    Comment(Comment),
-    ObjInfo(ObjInfo),
-    Element(ElementDef),
-    Property(PropertyDef),
-    EndHeader
-}
 
 macro_rules! is_line {
     ($e:expr, $t:ty) => (
         match $e {
-            Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
+            Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
             Ok(l @ Line::MagicNumber) => (l),
-            Ok(ob) => return Err(Error::new(
+            Ok(ob) => return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Invalid line encountered. Expected type: '$t', found: '{:?}'", ob)
             )),
@@ -39,29 +44,99 @@ macro_rules! is_line {
 
 
 fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
-    Err(Error::new(
+    Err(io::Error::new(
         ErrorKind::InvalidInput,
         format!("Line {}: {}\n\tString: '{}'\n\tError: {:?}", location.line_index, message, line_str, e)
     ))
 }
 fn parse_ascii_error<T>(location: &LocationTracker, line_str: &str, message: &str) -> Result<T> {
-    Err(Error::new(
+    Err(io::Error::new(
         ErrorKind::InvalidInput,
         format!("Line {}: {}\n\tString: '{}'", location.line_index, message, line_str)
     ))
 }
 
 use std::marker::PhantomData;
+
+/// Reads data given by a `Read` trait into `Ply` components.
+///
+/// In most cases `read_ply()` should suffice.
+/// If you need finer control over the read process,
+/// there are methods down to the line/element level.
+///
+/// # Examples
+///
+/// The most common case is probably to read from a file:
+///
+/// ```rust
+/// # use ply_rs::*;
+/// // set up a reader, in this case a file.
+/// let path = "example_plys/greg_turk_example1_ok_ascii.ply";
+/// let mut f = std::fs::File::open(path).unwrap();
+///
+/// // create a parser
+/// let p = parser::Parser::<ply::DefaultElement>::new();
+///
+/// // use the parser: read the entire file
+/// let ply = p.read_ply(&mut f);
+///
+/// // Did it work?
+/// assert!(ply.is_ok());
+/// ```
+///
+/// If you need finer control, you can start splitting the read operations down to the line/element level.
+///
+/// In the follwoing case we first read the header, and then continue with the payload.
+/// We need to build a Ply our selves.
+///
+/// ```rust
+/// # use ply_rs::*;
+/// // set up a reader as before.
+/// // let mut f = ... ;
+/// # let path = "example_plys/greg_turk_example1_ok_ascii.ply";
+/// # let f = std::fs::File::open(path).unwrap();
+/// // We need to wrap our `Read` into something providing `BufRead`
+/// let mut buf_read = std::io::BufReader::new(f);
+///
+/// // create a parser
+/// let p = parser::Parser::<ply::DefaultElement>::new();
+///
+/// // use the parser: read the header
+/// let header = p.read_header(&mut buf_read);
+/// // Did it work?
+/// let header = header.unwrap();
+///
+/// // read the payload
+/// //let payload = p.read_payload(&mut buf_read, &header);
+/// // Did it work?
+/// let payload = payload.unwrap();
+///
+/// // May be create your own Ply:
+/// let ply = ply::Ply {
+///     header: header,
+///     payload: payload,
+/// };
+///
+/// println!("Ply: {:#?}", ply);
+/// ```
+///
 pub struct Parser<E: PropertyAccess> {
       phantom: PhantomData<E>,
 }
 
 impl<E: PropertyAccess> Parser<E> {
+    /// Creates a new `Parser<E>`, where `E` is the type to store the element data in.
+    ///
+    /// To get started quickly try `DefaultElement` from the `ply` module.
     pub fn new() -> Self {
         Parser {
             phantom: PhantomData
         }
     }
+    /// Expects the complete content of a PLY file.
+    ///
+    /// A PLY file starts with "ply\n". `read_ply` reads until all elements have been read as
+    /// defined in the header of the PLY file.
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<E>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
@@ -72,6 +147,10 @@ impl<E: PropertyAccess> Parser<E> {
         ply.payload = payload;
         Ok(ply)
     }
+    /// Reads header until and inclusive `end_header`.
+    ///
+    /// A ply file starts with "ply\n". The header and the payload are separated by a line `end_header\n`.
+    /// This method reads all headere elemnts up to `end_header`.
     pub fn read_header<T: BufRead>(&self, reader: &mut T) -> Result<Header> {
         let mut line = LocationTracker::new();
         self.__read_header(reader, &mut line)
@@ -79,31 +158,18 @@ impl<E: PropertyAccess> Parser<E> {
     pub fn read_header_line(&self, line: &str) -> Result<Line> {
         match self.__read_header_line(line) {
             Ok(l) => Ok(l),
-            Err(e) => Err(Error::new(
+            Err(e) => Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Couldn't parse line.\n\tString: {}\n\tError: {:?}", line, e)
             )),
         }
     }
     pub fn read_payload_for_element<T: BufRead>(&self, reader: &mut T, element_def: &ElementDef, header: &Header) -> Result<Vec<E>> {
-        let mut location = LocationTracker::new();
         match header.encoding {
-            Encoding::Ascii => self.__read_ascii_payload_for_element(reader, &mut location, element_def),
-            Encoding::BinaryBigEndian => self.__read_binary_payload_for_element::<T, BigEndian>(reader, &mut location, element_def),
-            Encoding::BinaryLittleEndian => self.__read_binary_payload_for_element::<T, LittleEndian>(reader, &mut location, element_def),
+            Encoding::Ascii => self.read_ascii_payload_for_element(reader, element_def),
+            Encoding::BinaryBigEndian => self.read_big_endian_payload_for_element(reader, element_def),
+            Encoding::BinaryLittleEndian => self.read_little_endian_payload_for_element(reader, element_def),
         }
-    }
-    pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
-        /// Reduce coupling with ByteOrder
-        self.__read_binary_element::<T, BigEndian>(reader, element_def)
-
-    }
-    pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
-        /// Reduce coupling with ByteOrder
-        self.__read_binary_element::<T, LittleEndian>(reader, element_def)
-    }
-    pub fn read_ascii_element(&self, line: &str, element_def: &ElementDef) -> Result<E> {
-        self.__read_ascii_element(line, element_def)
     }
 
     // private
@@ -180,7 +246,7 @@ impl<E: PropertyAccess> Parser<E> {
             location.next_line();
         }
         if header_form_ver.is_none() {
-            return Err(Error::new(
+            return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 "No format line found."
             ));
@@ -194,20 +260,24 @@ impl<E: PropertyAccess> Parser<E> {
             elements: header_elements
         })
     }
+    pub fn read_payload<T: BufRead>(&self, reader: &mut T, header: &Header) -> Result<Payload<E>> {
+        let mut location = LocationTracker::new();
+        self.__read_payload(reader, &mut location, header)
+    }
     /// internal dispatcher based on the encoding
     fn __read_payload<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker, header: &Header) -> Result<Payload<E>> {
         let mut payload = Payload::new();
         match header.encoding {
             Encoding::Ascii => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_ascii_payload_for_element(reader, location, e));
+                let elems = try!(self.read_ascii_payload_for_element(reader, /* TODO: location,*/ e));
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryBigEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_binary_payload_for_element::<T, BigEndian>(reader, location, e));
+                let elems = try!(self.read_big_endian_payload_for_element(reader, /* TODO: location,*/ e));
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryLittleEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_binary_payload_for_element::<T, LittleEndian>(reader, location, e));
+                let elems = try!(self.read_little_endian_payload_for_element(reader, /* TODO: location,*/ e));
                 payload.insert(k.clone(), elems);
             }
         }
@@ -218,7 +288,7 @@ impl<E: PropertyAccess> Parser<E> {
 
 #[cfg(test)]
 mod tests {
-    use grammar as g;
+    use super::grammar as g;
     use super::*;
     macro_rules! assert_ok {
         ($e:expr) => (
