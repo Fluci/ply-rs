@@ -1,3 +1,5 @@
+//! Reads ascii or binary data into a `Ply`.
+
 use std::io::{ Read, BufReader, BufRead, Result, Error, ErrorKind };
 use std::fmt::Debug;
 use std::result;

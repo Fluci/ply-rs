@@ -50,6 +50,7 @@ impl<E: PropertyAccess> Ply<E>{
     /// Only exception is `write_ply()`, which, for convenience, performs the check itself.
     /// See `write_ply_unchecked()` for a variant that expects the client to assure consistency.
     pub fn make_consistent(&mut self) -> Result<(), ConsistencyError>{
+        // TODO: Add check for comment: ascii-only, no line breaks
         for (ek, _) in &self.header.elements {
             if !self.payload.contains_key(ek) {
                 self.payload.insert(ek.clone(), Vec::new());

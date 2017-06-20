@@ -1,16 +1,17 @@
-use std::io::{ Write, Result };
+use std::io::{ Write, Result, Error, ErrorKind };
 use std::fmt::Display;
 
 use ply::{ PropertyAccess, ElementDef, PropertyDef, PropertyType, ScalarType };
 use super::Writer;
 
 macro_rules! get_prop(
-    // TODO: errror
-    ($e:expr) => (match $e {None => return Ok(17), Some(x) => x})
+    ($e:expr) => (match $e {None => return Err(Error::new(ErrorKind::InvalidInput, "No property available for given key.")), Some(x) => x})
 );
 
 impl<E: PropertyAccess> Writer<E> {
-    pub fn __write_ascii_element<T: Write>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
+
+    /// Write a single ascii formatted element.
+    pub fn write_ascii_element<T: Write>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         let mut written = 0;
         let mut p_iter = element_def.properties.iter();
         let (_k, prop_type) = p_iter.next().unwrap();

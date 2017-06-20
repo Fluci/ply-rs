@@ -1,20 +1,48 @@
+
+
 use std::io::{ Write, Result, Error, ErrorKind };
 use std::string::ToString;
 
-use byteorder::{ BigEndian, LittleEndian };
-
 use ply::*;
+
+use std::marker::PhantomData;
 
 mod ascii;
 mod binary;
 
-pub enum NewLine {
-    N,
-    R,
-    RN
-}
-
-use std::marker::PhantomData;
+/// Writes a `Ply` to a `Write` trait.
+///
+/// The simplest function to start with is `write_ply()`.
+/// It performs all necessary checks and writes a complete PLY file.
+/// Sometimes you might want to have better control over how much is written.
+/// All other `write_` functions are for those cases.
+/// The trade-off is, that then you get responsible to write consistent data.
+/// See `Ply::make_consistent()`.
+///
+/// For further information on the PLY file format,
+/// consult the [official reference](http://paulbourke.net/dataformats/ply/).
+///
+/// # Examples
+///
+/// Simplest case of writing an entire PLY file en bloc:
+///
+/// ```rust
+/// # use ply_rs::ply::{Ply, DefaultElement};
+/// # use ply_rs::writer::Writer;
+/// // Get a Ply from somewhere
+/// // let mut ply = ...;
+/// # let mut ply = Ply::<DefaultElement>::new();
+///
+/// // Get a buffer with `Write` trait.
+/// // For example a file: let buf = std::io::File(".../your.ply").unwrap();
+/// # let mut buf = Vec::<u8>::new();
+///
+/// // Create a writer
+/// let w = Writer::new();
+///
+/// // Write your data:
+/// let written = w.write_ply(&mut buf, &mut ply).unwrap();
+/// ```
 pub struct Writer<E: PropertyAccess> {
     /// Should be fairly efficient, se `as_bytes()` in https://doc.rust-lang.org/src/collections/string.rs.html#1001
     new_line: String,
@@ -22,21 +50,20 @@ pub struct Writer<E: PropertyAccess> {
 }
 
 impl<E: PropertyAccess> Writer<E> {
+    /// Create a new `Writer<E>` where `E` is the element type. To get started quickly use `DefaultElement`.
     pub fn new() -> Self {
         Writer {
-            new_line: "\r\n".to_string(),
+            new_line: "\n".to_string(),
             phantom: PhantomData,
         }
     }
-    pub fn set_newline(&mut self, new_line: NewLine) {
-        self.new_line = match new_line {
-            NewLine::R => "\r".to_string(),
-            NewLine::N => "\n".to_string(),
-            NewLine::RN => "\r\n".to_string(),
-        };
-    }
     // TODO: think about masking and valid/invalid symbols
-    // TODO: make consistency check
+    /// Writes an entire PLY file modeled by `ply` to `out`, performs consistency chekc.
+    ///
+    /// `ply` must be mutable since a consistency check is performed.
+    /// If problems can be corrected automatically, `ply` will be modified accordingly.
+    ///
+    /// Returns number of bytes written.
     pub fn write_ply<T: Write>(&self, out: &mut T, ply: &mut Ply<E>) -> Result<usize> {
         match ply.make_consistent() {
             Ok(()) => (),
@@ -44,7 +71,12 @@ impl<E: PropertyAccess> Writer<E> {
         };
         self.write_ply_unchecked(out, ply)
     }
-    /// like `write_ply` but doesn't modify the input in case of inconsistency. It also doesn't check for it to be consistent.
+    /// Writes an entire PLY file modeled by `ply` to `out`, performes no consistency check.
+    ///
+    /// Like `write_ply` but doesn't check the input for inconsistency.
+    /// The user is responsible to provide a consistent `Ply`,
+    /// if not, behaviour is undefined and might result
+    /// in a corrupted output.
     pub fn write_ply_unchecked<T: Write>(&self, out: &mut T, ply: &Ply<E>) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_header(out, &ply.header));
@@ -52,12 +84,18 @@ impl<E: PropertyAccess> Writer<E> {
         out.flush().unwrap();
         Ok(written)
     }
+    /// Writes the magic number "ply" and a new line.
+    ///
+    /// Each PLY file must start with "ply\n".
     pub fn write_line_magic_number<T: Write>(&self, out: &mut T) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("ply".as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Writes "format <encoding> <version>".
+    ///
+    /// Each PLY file must define its format.
     pub fn write_line_format<T: Write>(&self, out: &mut T, encoding: &Encoding, version: &Version) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("format ".as_bytes()));
@@ -66,24 +104,39 @@ impl<E: PropertyAccess> Writer<E> {
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Writes a comment line.
+    ///
+    /// A comment must not contain a line break and only consist of ascii characters.
     pub fn write_line_comment<T: Write>(&self, out: &mut T, comment: &Comment) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(format!("comment {}", comment).as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Writes an object information line.
+    ///
+    /// An object informatio line must not contain a line break an only consist of ascii characters.
     pub fn write_line_obj_info<T: Write>(&self, out: &mut T, obj_info: &ObjInfo) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(format!("obj_info {}", obj_info).as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Writes an element line from the header: "element <name> <count>"
+    ///
+    /// This line is part of the header. It defines the format of an element.
+    /// It is directly followed by its property definitions.
+    ///
+    /// Make sure the header is consistent with the payload.
     pub fn write_line_element_definition<T: Write>(&self, out: &mut T, element: &ElementDef) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write(format!("element {} {}", element.name, element.count).as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Writes a property line form the header: "property [list <index_type> <scalar_type> | <scalar_type> ]"
+    ///
+    /// Make sure the property definition is consistent with the payload.
     pub fn write_line_property_definition<T: Write>(&self, out: &mut T, property: &PropertyDef) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("property ".as_bytes()));
@@ -94,6 +147,10 @@ impl<E: PropertyAccess> Writer<E> {
         Ok(written)
     }
     /// Writes the element line and all the property definitions
+    ///
+    /// Convenience method to call `write_line_element_definition` and `write_line_property_definition` in the correct way.
+    ///
+    /// Make sure the element definition is consistent with the payload.
     pub fn write_element_definition<T: Write>(&self, out: &mut T, element: &ElementDef) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_element_definition(out, &element));
@@ -102,12 +159,18 @@ impl<E: PropertyAccess> Writer<E> {
         }
         Ok(written)
     }
+    /// Writes `end_header\n`. This terminates the header. Each following byte belongs to the payload.
     pub fn write_line_end_header<T: Write>(&self, out: &mut T) -> Result<usize> {
         let mut written = 0;
         written += try!(out.write("end_header".as_bytes()));
         written += try!(self.write_new_line(out));
         Ok(written)
     }
+    /// Convenience method to write all header elements.
+    ///
+    /// It starts with writing the magic number "ply\n" and ends with "end_header".
+    ///
+    /// Make sure the header is consistent with the payload.
     pub fn write_header<T: Write>(&self, out: &mut T, header: &Header) -> Result<usize> {
         let mut written = 0;
         written += try!(self.write_line_magic_number(out));
@@ -161,7 +224,12 @@ impl<E: PropertyAccess> Writer<E> {
             ScalarType::Double => out.write("double".as_bytes()),
         }
     }
-    ///// Payload
+
+    // ///// Payload
+
+    /// Writes the payload of a `ply` (`ply.playload`).
+    ///
+    /// Make sure the Header is consistent with the payload.
     pub fn write_payload<T: Write>(&self, out: &mut T, payload: &Payload<E>, header: &Header) -> Result<usize> {
         let mut written = 0;
         let element_defs = &header.elements;
@@ -171,31 +239,24 @@ impl<E: PropertyAccess> Writer<E> {
         }
         Ok(written)
     }
+    /// Write all elments as stored in the `element_list`.
+    ///
+    /// Make sure the header and the element definition is consistent with the payload.
     pub fn write_payload_of_element<T: Write>(&self, out: &mut T, element_list: &Vec<E>, element_def: &ElementDef, header: &Header) -> Result<usize> {
         let mut written = 0;
         match header.encoding {
             Encoding::Ascii => for element in element_list {
-                written += try!(self.__write_ascii_element(out, element, &element_def));
+                written += try!(self.write_ascii_element(out, element, &element_def));
             },
             Encoding::BinaryBigEndian => for element in element_list {
-                written += try!(self.__write_binary_element::<T, BigEndian>(out, element, &element_def));
+                written += try!(self.write_big_endian_element(out, element, &element_def));
             },
             Encoding::BinaryLittleEndian => for element in element_list {
-                written += try!(self.__write_binary_element::<T, LittleEndian>(out, element, &element_def));
+                written += try!(self.write_little_endian_element(out, element, &element_def));
             }
         }
         Ok(written)
     }
-    pub fn write_ascii_element<T: Write>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
-        self.__write_ascii_element(out, element, element_def)
-    }
-    pub fn write_big_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
-        self.__write_binary_element::<T, BigEndian>(out, element, element_def)
-    }
-    pub fn write_little_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
-        self.__write_binary_element::<T, BigEndian>(out, element, element_def)
-    }
-
     fn write_new_line<T: Write>(&self, out: &mut T) -> Result<usize> {
         out.write(self.new_line.as_bytes())
     }

@@ -3,17 +3,25 @@ use super::Writer;
 
 use std::io::{ Write, Result, Error, ErrorKind };
 
-use byteorder::{ WriteBytesExt, ByteOrder };
+use byteorder::{ BigEndian, LittleEndian, WriteBytesExt, ByteOrder };
 
 
 macro_rules! get_prop(
     // TODO: errror
-    ($e:expr) => (match $e {None => return Ok(17), Some(x) => x})
+    ($e:expr) => (match $e {None => return Err(Error::new(ErrorKind::InvalidInput, "No property available for given key.")), Some(x) => x})
 );
 
 impl<E: PropertyAccess> Writer<E> {
     // private payload
-    pub fn __write_binary_element<T: Write, B: ByteOrder>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
+    /// Write a single binary formatted element in big endian.
+    pub fn write_big_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
+        self.__write_binary_element::<T, BigEndian>(out, element, element_def)
+    }
+    /// Write a single binary formatted element in little endian.
+    pub fn write_little_endian_element<T: Write> (&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
+        self.__write_binary_element::<T, LittleEndian>(out, element, element_def)
+    }
+    fn __write_binary_element<T: Write, B: ByteOrder>(&self, out: &mut T, element: &E, element_def: &ElementDef) -> Result<usize> {
         let mut written = 0;
         for (k, property_def) in &element_def.properties {
             match property_def.data_type {

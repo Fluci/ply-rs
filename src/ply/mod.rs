@@ -1,3 +1,5 @@
+//! Definitions used to model PLY files.
+
 
 mod consistency;
 pub use self::consistency::*;

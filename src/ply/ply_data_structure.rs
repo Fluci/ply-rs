@@ -81,6 +81,8 @@ pub type ObjInfo = String;
 pub type Comment = String;
 
 /// Models a version number.
+///
+/// At time of writing, the only existin version for a PLY file is "1.0".
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Version {
     pub major: u16,
