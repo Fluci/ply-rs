@@ -1,9 +1,18 @@
+sudo: true
 language: rust
-rust: 
+rust:
   - stable
   - beta
-  - nightly
-matrix:
-  allow_failures:
-    - rust: nightly
+#  - nightly
 
+script:
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+  - cargo doc --verbose
+os:
+  - linux
+  - osx
+#matrix:
+#  allow_failures:
+#    - rust: nightly
+after_success: scripts/travis-doc-upload.sh | sh
