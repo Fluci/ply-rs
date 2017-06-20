@@ -2,7 +2,15 @@ use super::KeyMap;
 use super::Property;
 use super::PropertyAccess;
 
-/// one line in the payload section is an element
+/// Ready to use data-structure for all kind of element definitions.
+///
+/// PLY files carry the payload format in their head section.
+/// Hence, they can contain all kind of elements, or formulated differently,
+/// they define types very dinamically.
+/// To achieve this flexibility in rust, this alias to a HashMap is provided.
+///
+/// If you need a more compact representation or faster access,
+/// you might want to define your own structures and implement the `PropertyAccess` trait.
 pub type DefaultElement = KeyMap<Property>;
 macro_rules! get(
     ($e:expr) => (match $e {None => return None, Some(x) => x})
