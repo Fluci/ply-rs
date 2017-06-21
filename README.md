@@ -1,6 +1,6 @@
 # Ply-rs
 
-[![Build Status](https://travis-ci.org/Fluci/ply-rs.svg?branch=master)](https://travis-ci.org/Fluci/ply-rs)
+[Documentation](https://fluci.github.io/travis_docs/ply-rs/ply_rs/index.html) | [![Build Status](https://travis-ci.org/Fluci/ply-rs.svg?branch=master)](https://travis-ci.org/Fluci/ply-rs)
 
 Ply-rs is a small library built to read and write the PLY file format (also Polygon File Format, Standford Triangle Format). The library supports all three subformats: ascii, big endian, and little endian.
 

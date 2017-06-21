@@ -6,6 +6,7 @@ repository = "https://github.com/Fluci/ply-rs.git"
 homepage = "https://github.com/Fluci/ply-rs"
 license = "MIT"
 readme = "README.md"
+documentation = "https://fluci.github.io/travis_docs/ply-rs/ply_rs/index.html"
 description = "Library for reading/writing ascii and binary PLY files."
 build = "build.rs"
 
