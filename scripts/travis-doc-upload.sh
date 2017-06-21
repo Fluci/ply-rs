@@ -10,6 +10,7 @@ echo "# Reading config"
 
 # filter such that only one job commits
 #[ "$TRAVIS_OS_NAME" = "linux" ]
+echo "# ${TRAVIS_BUILD_NUMBER}.1 = ${TRAVIS_JOB_NUMBER}"
 [ "${TRAVIS_BUILD_NUMBER}.1" = "${TRAVIS_JOB_NUMBER}" ]
 
 [ "$TRAVIS_BRANCH" = master ] || [ "$TRAVIS_BRANCH" = travis_docs ]
