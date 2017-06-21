@@ -8,7 +8,15 @@ license = "MIT"
 readme = "README.md"
 documentation = "https://fluci.github.io/travis_docs/ply-rs/ply_rs/index.html"
 description = "Library for reading/writing ascii and binary PLY files."
+keywords = [ "ply" ]
+categories = [ "encoding", "parsing" ]
 build = "build.rs"
+exclude = [
+    "scripts/*"
+]
+
+[badges]
+travis-ci = { repository = "Fluci/ply-rs", branch = "master" }
 
 [dependencies]
 linked-hash-map = "0.4.2"
