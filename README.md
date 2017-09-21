@@ -34,7 +34,7 @@ fn main() {}
 
 This is the easiest way to read a ply file:
 
-```rust
+```rust,no_run
 extern crate ply_rs;
 use ply_rs as ply;
 
