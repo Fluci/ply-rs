@@ -18,14 +18,22 @@ line_break
 	= "\r\n" / [\n\r]
 
 scalar -> ScalarType
-	= "char"   { ScalarType::Char }
-	/ "uchar"  { ScalarType::UChar }
-	/ "short"  { ScalarType::Short }
-	/ "ushort" { ScalarType::UShort }
-	/ "int"    { ScalarType::Int }
-	/ "uint"   { ScalarType::UInt }
-	/ "float"  { ScalarType::Float }
-	/ "double" { ScalarType::Double }
+	= "char"    { ScalarType::Char }
+	/ "int8"    { ScalarType::Char }
+	/ "uchar"   { ScalarType::UChar }
+	/ "uint8"   { ScalarType::UChar }
+	/ "short"   { ScalarType::Short }
+	/ "int16"   { ScalarType::Short }
+	/ "ushort"  { ScalarType::UShort }
+	/ "uint16"  { ScalarType::UShort }
+	/ "int"     { ScalarType::Int }
+	/ "int32"   { ScalarType::Int }
+	/ "uint"    { ScalarType::UInt }
+	/ "uint32"  { ScalarType::UInt }
+	/ "float"   { ScalarType::Float }
+	/ "float32" { ScalarType::Float }
+	/ "double"  { ScalarType::Double }
+	/ "float64" { ScalarType::Double }
 
 data_type -> PropertyType
 	= s:scalar   { PropertyType::Scalar(s) }
