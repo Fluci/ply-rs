@@ -93,3 +93,5 @@ fn main() {
 ```
 
 For more complicated examples, please see the [examples](examples/).
+
+This implementation is mainly based on [these specifications](http://paulbourke.net/dataformats/ply/) with additions from [here](https://people.sc.fsu.edu/%7Ejburkardt/data/ply/ply.txt).
