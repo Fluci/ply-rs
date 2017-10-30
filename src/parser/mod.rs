@@ -472,7 +472,6 @@ impl<E: PropertyAccess> Parser<E> {
     }
 
     /// internal wrapper
-    /// TODO: is there a way to put the binary and ascii parts in their own files?
     fn __read_big_endian_payload_for_element<T: Read>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
         self.__read_binary_payload_for_element::<T, BigEndian>(reader, location, element_def)
     }
