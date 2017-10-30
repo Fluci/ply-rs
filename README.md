@@ -9,7 +9,7 @@ Ply-rs is a small library built to read and write the PLY file format (also Poly
 It focuses on two main points:
 
 - An easy and fast start.
-- High performance if you're willing to do somethings yourself.
+- High performance if you're willing to do some things yourself.
 
 ## Getting started
 
