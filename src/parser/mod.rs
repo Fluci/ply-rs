@@ -460,14 +460,14 @@ impl<E: PropertyAccess> Parser<E> {
     ///
     /// Make sure all elements are parsed in the order they are defined in the header.
     pub fn read_big_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
-        /// Reduce coupling with ByteOrder
+        // Reduce coupling with ByteOrder
         self.__read_binary_element::<T, BigEndian>(reader, element_def)
     }
     /// Reads a single element as declared in èlement_def. Assumes big endian encoding.
     ///
     /// Make sure all elements are parsed in the order they are defined in the header.
     pub fn read_little_endian_element<T: Read>(&self, reader: &mut T, element_def: &ElementDef) -> Result<E> {
-        /// Reduce coupling with ByteOrder
+        // Reduce coupling with ByteOrder
         self.__read_binary_element::<T, LittleEndian>(reader, element_def)
     }
 
