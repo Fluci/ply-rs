@@ -96,7 +96,7 @@ trimmed_line -> Line
 	/ v:property { Line::Property(v) }
 
 any_number -> String
-	= s:$([-+]? [0-9]+("."[0-9]+)?) { s.to_string() }
+	= s:$([-+]? [0-9]+("."[0-9]+)?("e"[-+]?[0-9]+)?) { s.to_string() }
 
 trimmed_data_line -> Vec<String>
 	= any_number ** space
