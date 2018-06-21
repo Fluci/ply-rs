@@ -64,7 +64,6 @@ impl<E: PropertyAccess> Writer<E> {
             phantom: PhantomData,
         }
     }
-    // TODO: think about masking and valid/invalid symbols
     /// Writes an entire PLY file modeled by `ply` to `out`, performs consistency chekc.
     ///
     /// `ply` must be mutable since a consistency check is performed.
