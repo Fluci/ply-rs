@@ -24,16 +24,16 @@ scalar -> ScalarType
 	/ "uint8"   { ScalarType::UChar }
 	/ "short"   { ScalarType::Short }
 	/ "int16"   { ScalarType::Short }
-	/ "ushort"  { ScalarType::UShort }
 	/ "uint16"  { ScalarType::UShort }
-	/ "int"     { ScalarType::Int }
+	/ "ushort"  { ScalarType::UShort }
 	/ "int32"   { ScalarType::Int }
-	/ "uint"    { ScalarType::UInt }
+	/ "int"     { ScalarType::Int }
 	/ "uint32"  { ScalarType::UInt }
-	/ "float"   { ScalarType::Float }
+	/ "uint"    { ScalarType::UInt }
 	/ "float32" { ScalarType::Float }
-	/ "double"  { ScalarType::Double }
+	/ "float"   { ScalarType::Float }
 	/ "float64" { ScalarType::Double }
+	/ "double"  { ScalarType::Double }
 
 data_type -> PropertyType
 	= s:scalar   { PropertyType::Scalar(s) }
