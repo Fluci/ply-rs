@@ -101,4 +101,4 @@ any_number -> String
 trimmed_data_line -> Vec<String>
 	= any_number ** space
 pub data_line -> Vec<String>
-	= l:trimmed_data_line space? line_break? {l}
+	= space? l:trimmed_data_line space? line_break? {l}
