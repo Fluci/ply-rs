@@ -1,6 +1,6 @@
 [package]
 name = "ply-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Felice Serena <felice@serena-mueller.ch>"]
 repository = "https://github.com/Fluci/ply-rs.git"
 homepage = "https://github.com/Fluci/ply-rs"
