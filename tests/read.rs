@@ -55,6 +55,11 @@ fn read_exponent_values_ok() {
     let ply = read_file("example_plys/exponent_values_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
 }
+#[test]
+fn read_leading_spaces_ok() {
+    let ply = read_file("example_plys/leading_spaces_ok_ascii.ply");
+    println!("Created ply: {:?}", ply);
+}
 
 mod struct_test_1 {
     use super::ply;

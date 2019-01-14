@@ -1,0 +1,13 @@
+ply
+format ascii 1.0
+comment Hi, I'm your friendly comment.
+obj_info And I'm your object information.
+element point 4
+property float x
+property float y
+end_header
+   	 21.0 14
+	   1 3.0
+11   12
+  	1.2 3.4
+	42 17
