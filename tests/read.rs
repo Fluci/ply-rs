@@ -50,6 +50,11 @@ fn read_greg_turk_2() {
     let ply = read_file("example_plys/greg_turk_example2_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
 }
+#[test]
+fn read_exponent_values_ok() {
+    let ply = read_file("example_plys/exponent_values_ok_ascii.ply");
+    println!("Created ply: {:?}", ply);
+}
 
 mod struct_test_1 {
     use super::ply;
