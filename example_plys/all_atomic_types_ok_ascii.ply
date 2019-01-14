@@ -1,0 +1,23 @@
+ply
+format ascii 1.0
+comment Hi, I'm your friendly comment.
+obj_info And I'm your object information.
+element point 1
+property char a
+property int8 b
+property uchar c
+property uint8 d
+property short e
+property int16 f
+property uint16 g
+property ushort h
+property int32 i
+property int j
+property uint32 k
+property uint l
+property float32 m
+property float n
+property float64 o
+property double p
+end_header
+1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8

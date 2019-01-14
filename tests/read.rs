@@ -60,6 +60,11 @@ fn read_leading_spaces_ok() {
     let ply = read_file("example_plys/leading_spaces_ok_ascii.ply");
     println!("Created ply: {:?}", ply);
 }
+#[test]
+fn read_all_atomic_types_ok() {
+    let ply = read_file("example_plys/all_atomic_types_ok_ascii.ply");
+    println!("Created ply: {:?}", ply);
+}
 
 mod struct_test_1 {
     use super::ply;

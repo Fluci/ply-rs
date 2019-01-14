@@ -31,8 +31,8 @@ scalar -> ScalarType
 	/ "uint32"  { ScalarType::UInt }
 	/ "uint"    { ScalarType::UInt }
 	/ "float32" { ScalarType::Float }
-	/ "float"   { ScalarType::Float }
 	/ "float64" { ScalarType::Double }
+	/ "float"   { ScalarType::Float }
 	/ "double"  { ScalarType::Double }
 
 data_type -> PropertyType
