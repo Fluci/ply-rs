@@ -19,7 +19,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ply-rs = "0.1.2"
+ply-rs = "0.1.3"
 ```
 
 Add to your root:
