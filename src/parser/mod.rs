@@ -7,22 +7,9 @@ use std::result;
 
 use std::io::{ BufRead, Result, ErrorKind };
 
-mod ply_grammar {
-    use ply::{ PropertyDef, PropertyType, ScalarType, Encoding, Version, Comment, ObjInfo,ElementDef };
-    #[derive(Debug, PartialEq, Clone)]
-    pub enum Line {
-        MagicNumber,
-        Format((Encoding, Version)),
-        Comment(Comment),
-        ObjInfo(ObjInfo),
-        Element(ElementDef),
-        Property(PropertyDef),
-        EndHeader
-    }
-    include!(concat!(env!("OUT_DIR"), "/ply_grammar.rs"));
-}
+mod ply_grammar;
 
-use self::ply_grammar as grammar;
+use self::ply_grammar::grammar;
 use self::ply_grammar::Line;
 use util::LocationTracker;
 
@@ -175,7 +162,7 @@ impl<E: PropertyAccess> Parser<E> {
     }
 
     // private
-    fn __read_header_line(&self, line_str: &str) -> result::Result<Line, grammar::ParseError> {
+    fn __read_header_line(&self, line_str: &str) -> result::Result<Line, peg::error::ParseError<peg::str::LineCol>> {
         grammar::line(line_str)
     }
     fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
@@ -452,7 +439,7 @@ use util::LocationTracker;
 use super::Parser;
 */
 use byteorder::{ BigEndian, LittleEndian, ReadBytesExt, ByteOrder };
-
+use peg;
 
 /// # Binary
 impl<E: PropertyAccess> Parser<E> {
@@ -685,6 +672,7 @@ mod tests {
     #[test]
     fn comment_err() {
         assert_err!(g::comment("commentt"));
+        println!("{:?}", g::comment("comment hi\na comment"));
         assert_err!(g::comment("comment hi\na comment"));
         assert_err!(g::comment("comment hi\r\na comment"));
     }

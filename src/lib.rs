@@ -28,6 +28,7 @@
 
 extern crate linked_hash_map;
 extern crate byteorder;
+extern crate peg;
 pub mod parser;
 pub mod ply;
 pub mod writer;
