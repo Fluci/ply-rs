@@ -130,8 +130,8 @@ impl<E: PropertyAccess> Parser<E> {
     pub fn read_ply<T: Read>(&self, source: &mut T) -> Result<Ply<E>> {
         let mut source = BufReader::new(source);
         let mut location = LocationTracker::new();
-        let header = try!(self.__read_header(&mut source, &mut location));
-        let payload = try!(self.__read_payload(&mut source, &mut location, &header));
+        let header = self.__read_header(&mut source, &mut location)?;
+        let payload = self.__read_payload(&mut source, &mut location, &header)?;
         let mut ply = Ply::new();
         ply.header = header;
         ply.payload = payload;
@@ -181,7 +181,7 @@ impl<E: PropertyAccess> Parser<E> {
     fn __read_header<T: BufRead>(&self, reader: &mut T, location: &mut LocationTracker) -> Result<Header> {
         location.next_line();
         let mut line_str = String::new();
-        try!(reader.read_line(&mut line_str));
+        reader.read_line(&mut line_str)?;
         match self.__read_header_line(&line_str) {
             Ok(Line::MagicNumber) => (),
             Ok(l) => return parse_ascii_error(location, &line_str, &format!("Expected magic number 'ply', but saw '{:?}'.", l)),
@@ -203,7 +203,7 @@ impl<E: PropertyAccess> Parser<E> {
         location.next_line();
         'readlines: loop {
             line_str.clear();
-            try!(reader.read_line(&mut line_str));
+            reader.read_line(&mut line_str)?;
             let line = self.__read_header_line(&line_str);
 
             match line {
@@ -297,15 +297,15 @@ impl<E: PropertyAccess> Parser<E> {
         let mut payload = Payload::new();
         match header.encoding {
             Encoding::Ascii => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_ascii_payload_for_element(reader, location, e));
+                let elems = self.__read_ascii_payload_for_element(reader, location, e)?;
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryBigEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_big_endian_payload_for_element(reader, location, e));
+                let elems = self.__read_big_endian_payload_for_element(reader, location, e)?;
                 payload.insert(k.clone(), elems);
             },
             Encoding::BinaryLittleEndian => for (k, ref e) in &header.elements {
-                let elems = try!(self.__read_little_endian_payload_for_element(reader, location, e));
+                let elems = self.__read_little_endian_payload_for_element(reader, location, e)?;
                 payload.insert(k.clone(), elems);
             }
         }
@@ -343,7 +343,7 @@ impl<E: PropertyAccess> Parser<E> {
         let mut line_str = String::new();
         for _ in 0..element_def.count {
             line_str.clear();
-            try!(reader.read_line(&mut line_str));
+            reader.read_line(&mut line_str)?;
 
             let element = match self.read_ascii_element(&line_str, element_def) {
                 Ok(e) => e,
@@ -369,7 +369,7 @@ impl<E: PropertyAccess> Parser<E> {
         let mut elem_it : Iter<String> = elems.iter();
         let mut vals = E::new();
         for (k, p) in &element_def.properties {
-            let new_p : Property = try!(self.__read_ascii_property(&mut elem_it, &p.data_type));
+            let new_p : Property = self.__read_ascii_property(&mut elem_it, &p.data_type)?;
             vals.set_property(k.clone(), new_p);
         }
         Ok(vals)
@@ -385,26 +385,26 @@ impl<E: PropertyAccess> Parser<E> {
 
         let result = match *data_type {
             PropertyType::Scalar(ref scalar_type) => match *scalar_type {
-                ScalarType::Char => Property::Char(try!(self.parse(s))),
-                ScalarType::UChar => Property::UChar(try!(self.parse(s))),
-                ScalarType::Short => Property::Short(try!(self.parse(s))),
-                ScalarType::UShort => Property::UShort(try!(self.parse(s))),
-                ScalarType::Int => Property::Int(try!(self.parse(s))),
-                ScalarType::UInt => Property::UInt(try!(self.parse(s))),
-                ScalarType::Float => Property::Float(try!(self.parse(s))),
-                ScalarType::Double => Property::Double(try!(self.parse(s))),
+                ScalarType::Char => Property::Char(self.parse(s)?),
+                ScalarType::UChar => Property::UChar(self.parse(s)?),
+                ScalarType::Short => Property::Short(self.parse(s)?),
+                ScalarType::UShort => Property::UShort(self.parse(s)?),
+                ScalarType::Int => Property::Int(self.parse(s)?),
+                ScalarType::UInt => Property::UInt(self.parse(s)?),
+                ScalarType::Float => Property::Float(self.parse(s)?),
+                ScalarType::Double => Property::Double(self.parse(s)?),
             },
             PropertyType::List(_, ref scalar_type) => {
-                let count : usize = try!(self.parse(s));
+                let count : usize = self.parse(s)?;
                 match *scalar_type {
-                    ScalarType::Char => Property::ListChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UChar => Property::ListUChar(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Short => Property::ListShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UShort => Property::ListUShort(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Int => Property::ListInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::UInt => Property::ListUInt(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Float => Property::ListFloat(try!(self.__read_ascii_list(elem_iter, count))),
-                    ScalarType::Double => Property::ListDouble(try!(self.__read_ascii_list(elem_iter, count))),
+                    ScalarType::Char => Property::ListChar(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::UChar => Property::ListUChar(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::Short => Property::ListShort(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::UShort => Property::ListUShort(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::Int => Property::ListInt(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::UInt => Property::ListUInt(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::Float => Property::ListFloat(self.__read_ascii_list(elem_iter, count)?),
+                    ScalarType::Double => Property::ListDouble(self.__read_ascii_list(elem_iter, count)?),
                 }
             }
         };
@@ -431,7 +431,7 @@ impl<E: PropertyAccess> Parser<E> {
                 )),
                 Some(x) => x
             };
-            let value : D = try!(self.parse(s));
+            let value : D = self.parse(s)?;
             list.push(value);
         }
         Ok(list)
@@ -482,7 +482,7 @@ impl<E: PropertyAccess> Parser<E> {
     fn __read_binary_payload_for_element<T: Read, B: ByteOrder>(&self, reader: &mut T, location: &mut LocationTracker, element_def: &ElementDef) -> Result<Vec<E>> {
         let mut elems = Vec::<E>::new();
         for _ in 0..element_def.count {
-            let element = try!(self.__read_binary_element::<T, B>(reader, element_def));
+            let element = self.__read_binary_element::<T, B>(reader, element_def)?;
             elems.push(element);
             location.next_line();
         }
@@ -492,7 +492,7 @@ impl<E: PropertyAccess> Parser<E> {
         let mut raw_element = E::new();
 
         for (k, p) in &element_def.properties {
-            let property = try!(self.__read_binary_property::<T, B>(reader, &p.data_type));
+            let property = self.__read_binary_property::<T, B>(reader, &p.data_type)?;
             raw_element.set_property(k.clone(), property);
         }
         Ok(raw_element)
@@ -500,41 +500,41 @@ impl<E: PropertyAccess> Parser<E> {
     fn __read_binary_property<T: Read, B: ByteOrder>(&self, reader: &mut T, data_type: &PropertyType) -> Result<Property> {
         let result = match *data_type {
             PropertyType::Scalar(ref scalar_type) => match *scalar_type {
-                ScalarType::Char => Property::Char(try!(reader.read_i8())),
-                ScalarType::UChar => Property::UChar(try!(reader.read_u8())),
-                ScalarType::Short => Property::Short(try!(reader.read_i16::<B>())),
-                ScalarType::UShort => Property::UShort(try!(reader.read_u16::<B>())),
-                ScalarType::Int => Property::Int(try!(reader.read_i32::<B>())),
-                ScalarType::UInt => Property::UInt(try!(reader.read_u32::<B>())),
-                ScalarType::Float => Property::Float(try!(reader.read_f32::<B>())),
-                ScalarType::Double => Property::Double(try!(reader.read_f64::<B>())),
+                ScalarType::Char => Property::Char(reader.read_i8()?),
+                ScalarType::UChar => Property::UChar(reader.read_u8()?),
+                ScalarType::Short => Property::Short(reader.read_i16::<B>()?),
+                ScalarType::UShort => Property::UShort(reader.read_u16::<B>()?),
+                ScalarType::Int => Property::Int(reader.read_i32::<B>()?),
+                ScalarType::UInt => Property::UInt(reader.read_u32::<B>()?),
+                ScalarType::Float => Property::Float(reader.read_f32::<B>()?),
+                ScalarType::Double => Property::Double(reader.read_f64::<B>()?),
             },
             PropertyType::List(ref index_type, ref property_type) => {
                 let count : usize = match *index_type {
-                    ScalarType::Char => try!(reader.read_i8()) as usize,
-                    ScalarType::UChar => try!(reader.read_u8()) as usize,
-                    ScalarType::Short => try!(reader.read_i16::<B>()) as usize,
-                    ScalarType::UShort => try!(reader.read_u16::<B>()) as usize,
-                    ScalarType::Int => try!(reader.read_i32::<B>()) as usize,
-                    ScalarType::UInt => try!(reader.read_u32::<B>()) as usize,
+                    ScalarType::Char => reader.read_i8()? as usize,
+                    ScalarType::UChar => reader.read_u8()? as usize,
+                    ScalarType::Short => reader.read_i16::<B>()? as usize,
+                    ScalarType::UShort => reader.read_u16::<B>()? as usize,
+                    ScalarType::Int => reader.read_i32::<B>()? as usize,
+                    ScalarType::UInt => reader.read_u32::<B>()? as usize,
                     ScalarType::Float => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in ScalarType.")),
                     ScalarType::Double => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in ScalarType.")),
                 };
                 match *property_type {
-                    ScalarType::Char => Property::ListChar(try!(self.__read_binary_list(reader, &|r| r.read_i8(), count))),
-                    ScalarType::UChar => Property::ListUChar(try!(self.__read_binary_list(reader, &|r| r.read_u8(), count))),
-                    ScalarType::Short => Property::ListShort(try!(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count))),
-                    ScalarType::UShort => Property::ListUShort(try!(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count))),
-                    ScalarType::Int => Property::ListInt(try!(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count))),
-                    ScalarType::UInt => Property::ListUInt(try!(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count))),
-                    ScalarType::Float => Property::ListFloat(try!(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count))),
-                    ScalarType::Double => Property::ListDouble(try!(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count))),
+                    ScalarType::Char => Property::ListChar(self.__read_binary_list(reader, &|r| r.read_i8(), count)?),
+                    ScalarType::UChar => Property::ListUChar(self.__read_binary_list(reader, &|r| r.read_u8(), count)?),
+                    ScalarType::Short => Property::ListShort(self.__read_binary_list(reader, &|r| r.read_i16::<B>(), count)?),
+                    ScalarType::UShort => Property::ListUShort(self.__read_binary_list(reader, &|r| r.read_u16::<B>(), count)?),
+                    ScalarType::Int => Property::ListInt(self.__read_binary_list(reader, &|r| r.read_i32::<B>(), count)?),
+                    ScalarType::UInt => Property::ListUInt(self.__read_binary_list(reader, &|r| r.read_u32::<B>(), count)?),
+                    ScalarType::Float => Property::ListFloat(self.__read_binary_list(reader, &|r| r.read_f32::<B>(), count)?),
+                    ScalarType::Double => Property::ListDouble(self.__read_binary_list(reader, &|r| r.read_f64::<B>(), count)?),
                 }
             }
         };
         Ok(result)
     }
-    fn __read_binary_list<T: Read, D: FromStr>(&self, reader: &mut T, read_from: &Fn(&mut T) -> Result<D>, count: usize) -> Result<Vec<D>>
+    fn __read_binary_list<T: Read, D: FromStr>(&self, reader: &mut T, read_from: &dyn Fn(&mut T) -> Result<D>, count: usize) -> Result<Vec<D>>
         where <D as FromStr>::Err: error::Error + marker::Send + marker::Sync + 'static {
         let mut list = Vec::<D>::new();
         for i in 0..count {
