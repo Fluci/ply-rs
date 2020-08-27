@@ -80,7 +80,12 @@ pub rule comment() -> Comment
 	}
 
 pub rule obj_info() -> ObjInfo
-	= "obj_info" space() c:text() { c.to_string() }
+	= "obj_info" space() c:text() {
+	    c.to_string()
+	}
+	/ "obj_info" space()? {
+	    String::new()
+	}
 
 pub rule element() -> ElementDef
 	= "element" space() id:$(ident()) space() n:uint() {

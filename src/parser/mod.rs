@@ -638,6 +638,8 @@ mod tests {
         assert_err!(g::magic_number("py"));
         assert_err!(g::magic_number("plyhi"));
         assert_err!(g::magic_number("hiply"));
+        assert_err!(g::magic_number(" ply"));
+        assert_err!(g::magic_number("ply "));
     }
     #[test]
     fn format_ok() {
@@ -658,27 +660,42 @@ mod tests {
     fn format_err() {
         assert_err!(g::format("format asciii 1.0"));
         assert_err!(g::format("format ascii -1.0"));
+        assert_err!(g::format("format ascii 1.0.3"));
+        assert_err!(g::format("format ascii 1."));
+        assert_err!(g::format("format ascii 1"));
+        assert_err!(g::format("format ascii 1.0a"));
     }
     #[test]
     fn comment_ok() {
-        assert_ok!(g::comment("comment hi"));
+        assert_ok!(g::comment("comment hi"), "hi");
         assert_ok!(
             g::comment("comment   hi, I'm a comment!"),
             "hi, I'm a comment!"
         );
-        assert_ok!(g::comment("comment "));
-        assert_ok!(g::comment("comment"));
+        assert_ok!(g::comment("comment "), "");
+        assert_ok!(g::comment("comment\t"), "");
+        assert_ok!(g::comment("comment"), "");
+        assert_ok!(g::comment("comment\t"), "");
+        assert_ok!(g::comment("comment\thi"), "hi");
     }
     #[test]
     fn comment_err() {
         assert_err!(g::comment("commentt"));
-        println!("{:?}", g::comment("comment hi\na comment"));
+        assert_err!(g::comment("comment\n"));
         assert_err!(g::comment("comment hi\na comment"));
         assert_err!(g::comment("comment hi\r\na comment"));
+        assert_err!(g::comment("comment hi\ra comment"));
     }
     #[test]
     fn obj_info_ok() {
-        assert_ok!(g::obj_info("obj_info Hi, I can help."));
+        assert_ok!(g::obj_info("obj_info Hi, I can help."), "Hi, I can help.");
+        assert_ok!(g::obj_info("obj_info"), "");
+        assert_ok!(g::obj_info("obj_info "), "");
+        assert_ok!(g::obj_info("obj_info\t"), "");
+    }
+    #[test]
+    fn obj_info_err() {
+        assert_err!(g::obj_info("obj_info\n"));
     }
     #[test]
     fn element_ok() {
@@ -726,6 +743,20 @@ mod tests {
     }
     #[test]
     fn data_line_ok() {
-        assert_ok!(g::data_line("-7 +5.21 \r\n"));
+        assert_ok!(
+            g::data_line("+7 -7 7 +5.21 -5.21 5.21 +0 -0 0 \r\n"),
+            vec!["+7", "-7", "7", "+5.21", "-5.21", "5.21", "+0", "-0", "0"]
+        );
+        assert_ok!(
+            g::data_line("034 8e3 8e-3"),
+            vec!["034", "8e3", "8e-3"]
+        );
+        assert_ok!(g::data_line(""), Vec::<String>::new());
+    }
+    #[test]
+    fn data_line_err() {
+        assert_err!(g::data_line("++3"));
+        assert_err!(g::data_line("+-3"));
+        assert_err!(g::data_line("five"));
     }
 }
