@@ -1,4 +1,4 @@
-use ply::{ PropertyDef, PropertyType, ScalarType, Encoding, Version, Comment, ObjInfo,ElementDef };
+use crate::ply::{ PropertyDef, PropertyType, ScalarType, Encoding, Version, Comment, ObjInfo,ElementDef };
 #[derive(Debug, PartialEq, Clone)]
 pub enum Line {
     MagicNumber,

@@ -11,7 +11,7 @@ mod ply_grammar;
 
 use self::ply_grammar::grammar;
 use self::ply_grammar::Line;
-use util::LocationTracker;
+use crate::util::LocationTracker;
 
 fn parse_ascii_rethrow<T, E: Debug>(location: &LocationTracker, line_str: &str, e: E, message: &str) -> Result<T> {
     Err(io::Error::new(
@@ -97,8 +97,8 @@ pub struct Parser<E: PropertyAccess> {
 
 //use std::marker::PhantomData;
 //use std::io::{ Read, BufReader };
-use ply::Ply;
-use ply::{ Header, Payload, Encoding };
+use crate::ply::Ply;
+use crate::ply::{ Header, Payload, Encoding };
 
 impl<E: PropertyAccess> Parser<E> {
     /// Creates a new `Parser<E>`, where `E` is the type to store the element data in.
@@ -127,7 +127,7 @@ impl<E: PropertyAccess> Parser<E> {
 }
 
 // use ply::{ Header, Encoding };
-use ply::{ PropertyAccess, Version, ObjInfo, Comment, ElementDef, KeyMap, Addable };
+use crate::ply::{ PropertyAccess, Version, ObjInfo, Comment, ElementDef, KeyMap, Addable };
 /*
 use util::LocationTracker;
 use super::Parser;
@@ -319,7 +319,7 @@ use ply::{ PropertyAccess, ElementDef };
 use std::slice::Iter;
 use std::str::FromStr;
 
-use ply::{ Property, PropertyType, ScalarType };
+use crate::ply::{ Property, PropertyType, ScalarType };
 use std::error;
 use std::marker;
 
@@ -544,8 +544,8 @@ impl<E: PropertyAccess> Parser<E> {
 mod tests {
     use super::grammar as g;
     use super::Line;
-    use parser::Parser;
-    use ply::{ DefaultElement, PropertyDef, Version, Encoding, ScalarType, PropertyType, ElementDef, KeyMap, Addable };
+    use crate::parser::Parser;
+    use crate::ply::{ DefaultElement, PropertyDef, Version, Encoding, ScalarType, PropertyType, ElementDef, KeyMap, Addable };
     macro_rules! assert_ok {
         ($e:expr) => (
             match $e {

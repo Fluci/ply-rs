@@ -14,6 +14,7 @@ build = "build.rs"
 exclude = [
     "scripts/*"
 ]
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "Fluci/ply-rs", branch = "master" }

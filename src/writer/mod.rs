@@ -1,7 +1,7 @@
 //! Writes ascii or binary data from a `Ply` to a `Write` trait.
 
 use std::marker::PhantomData;
-use ply::PropertyAccess;
+use crate::ply::PropertyAccess;
 
 /// Writes a `Ply` to a `Write` trait.
 ///
@@ -51,7 +51,7 @@ use ply::PropertyAccess;
 use std::io;
 use std::io::{ Write, Result, ErrorKind };
 
-use ply::Ply;
+use crate::ply::Ply;
 
 // ////////////////////////////
 // General
@@ -102,7 +102,7 @@ use std::io::{ Write, ErrorKind, Result };
 use super::general;
 use ply::PropertyAccess;
 // */
-use ply::{ Header, Encoding, Version, Comment, ObjInfo, ElementDef, PropertyDef, PropertyType, ScalarType };
+use crate::ply::{ Header, Encoding, Version, Comment, ObjInfo, ElementDef, PropertyDef, PropertyType, ScalarType };
 
 // ////////////////////////
 /// # Header
@@ -254,7 +254,7 @@ use writer::Writer;
 use std::io::{ Write, Result };
 use ply::{ Header, PropertyAccess, Encoding, ElementDef };
 // */
-use ply::Payload;
+use crate::ply::Payload;
 
 // ////////////////////////
 /// # Payload
