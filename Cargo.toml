@@ -22,7 +22,7 @@ travis-ci = { repository = "Fluci/ply-rs", branch = "master" }
 [dependencies]
 linked-hash-map = "^0.5.1"
 byteorder = "^1.2.7"
-peg = "^0.6.0"
+peg = "^0.7.0"
 
 [build-dependencies]
 skeptic = "^0.13.4"
