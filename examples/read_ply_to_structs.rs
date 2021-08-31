@@ -29,7 +29,7 @@ impl ply::PropertyAccess for Vertex {
             z: 0.0,
         }
     }
-    fn set_property(&mut self, key: String, property: ply::Property) {
+    fn set_property(&mut self, key: &String, property: ply::Property) {
         match (key.as_ref(), property) {
             ("x", ply::Property::Float(v)) => self.x = v,
             ("y", ply::Property::Float(v)) => self.y = v,
@@ -46,7 +46,7 @@ impl ply::PropertyAccess for Face {
             vertex_index: Vec::new(),
         }
     }
-    fn set_property(&mut self, key: String, property: ply::Property) {
+    fn set_property(&mut self, key: &String, property: ply::Property) {
         match (key.as_ref(), property) {
             ("vertex_index", ply::Property::ListInt(vec)) => self.vertex_index = vec,
             (k, _) => panic!("Face: Unexpected key/value combination: key: {}", k),

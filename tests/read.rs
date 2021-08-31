@@ -92,8 +92,8 @@ mod struct_test_1 {
                 z: 0.0,
             }
         }
-        fn set_property(&mut self, key: String, property: ply::Property) {
-            match (key.as_ref(), property) {
+        fn set_property(&mut self, key: &String, property: ply::Property) {
+            match (key.as_str(), property) {
                 ("x", ply::Property::Float(v)) => self.x = v,
                 ("y", ply::Property::Float(v)) => self.y = v,
                 ("z", ply::Property::Float(v)) => self.z = v,
@@ -109,8 +109,8 @@ mod struct_test_1 {
                 vertex_index: Vec::new(),
             }
         }
-        fn set_property(&mut self, key: String, property: ply::Property) {
-            match (key.as_ref(), property) {
+        fn set_property(&mut self, key: &String, property: ply::Property) {
+            match (key.as_str(), property) {
                 ("vertex_index", ply::Property::ListInt(vec)) => self.vertex_index = vec,
                 (k, _) => panic!("Face: Unexpected key/value combination: key: {}", k),
             }
