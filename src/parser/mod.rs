@@ -357,7 +357,7 @@ impl<E: PropertyAccess> Parser<E> {
         let mut vals = E::new();
         for (k, p) in &element_def.properties {
             let new_p : Property = self.__read_ascii_property(&mut elem_it, &p.data_type)?;
-            vals.set_property(k.clone(), new_p);
+            vals.set_property(k, new_p);
         }
         Ok(vals)
     }
@@ -480,7 +480,7 @@ impl<E: PropertyAccess> Parser<E> {
 
         for (k, p) in &element_def.properties {
             let property = self.__read_binary_property::<T, B>(reader, &p.data_type)?;
-            raw_element.set_property(k.clone(), property);
+            raw_element.set_property(k, property);
         }
         Ok(raw_element)
     }

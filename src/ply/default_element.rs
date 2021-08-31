@@ -19,8 +19,8 @@ impl PropertyAccess for DefaultElement {
     fn new() -> Self {
         DefaultElement::new()
     }
-    fn set_property(&mut self, key: String, property: Property) {
-        self.insert(key, property);
+    fn set_property(&mut self, key: &String, property: Property) {
+        self.insert(key.to_string(), property);
     }
     fn get_char(&self, key: &String) -> Option<i8> {
         match *get!(self.get(key)) {

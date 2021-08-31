@@ -76,7 +76,7 @@ pub enum Property {
 /// The getters are named in congruence with `PropertyType` and `ScalarType`.
 pub trait PropertyAccess {
     fn new() -> Self;
-    fn set_property(&mut self, _property_name: String, _property: Property) {
+    fn set_property(&mut self, _property_name: &String, _property: Property) {
         // By default, do nothing
         // Sombody might only want to write, no point in bothering him/her with setter implementations.
     }
