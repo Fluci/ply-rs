@@ -176,7 +176,7 @@ impl<E: PropertyAccess> Parser<E> {
         }
         match grammar::line(&line_str) {
             Err(e) => return Err(io::Error::new(ErrorKind::InvalidInput, e)),
-            Ok(l @ Line::MagicNumber) => (l),
+            Ok(l @ Line::MagicNumber) => l,
             Ok(ob) => return Err(io::Error::new(
                 ErrorKind::InvalidInput,
                 format!("Invalid line encountered. Expected type: 'Line::MagicNumber', found: '{:?}'", ob)
@@ -196,7 +196,7 @@ impl<E: PropertyAccess> Parser<E> {
             match line {
                 Err(e) => return parse_ascii_rethrow(location, &line_str, e, "Couldn't parse line."),
                 Ok(Line::MagicNumber) => return parse_ascii_error(location, &line_str, "Unexpected 'ply' found."),
-                Ok(Line::Format(ref t)) => (
+                Ok(Line::Format(ref t)) =>
                     if header_form_ver.is_none() {
                         header_form_ver = Some(t.clone());
                     } else {
@@ -214,17 +214,17 @@ impl<E: PropertyAccess> Parser<E> {
                             )
                         }
                     }
-                ),
-                Ok(Line::ObjInfo(ref o)) => (
+                ,
+                Ok(Line::ObjInfo(ref o)) =>
                     header_obj_infos.push(o.clone())
-                ),
-                Ok(Line::Comment(ref c)) => (
+                ,
+                Ok(Line::Comment(ref c)) =>
                     header_comments.push(c.clone())
-                ),
+                ,
                 Ok(Line::Element(ref e)) => {
                     header_elements.add(e.clone())
                 },
-                Ok(Line::Property(p)) => (
+                Ok(Line::Property(p)) =>
                     if header_elements.is_empty() {
                         return parse_ascii_error(
                             location,
@@ -236,7 +236,7 @@ impl<E: PropertyAccess> Parser<E> {
                         e.properties.add(p);
                         header_elements.add(e);
                     }
-                ),
+                ,
                 Ok(Line::EndHeader) => { location.next_line(); break 'readlines; },
             };
             location.next_line();
