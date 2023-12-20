@@ -405,28 +405,30 @@ impl<E: PropertyAccess> Writer<E> {
                         ScalarType::Double => {out.write_f64::<B>(get_prop!(element.get_double(k)))?; 8},
                     };
                 },
-                PropertyType::List(ref index_type, ref scalar_type) => {
-                    let vec_len = element_def.count;
-                    written += match *index_type {
-                        ScalarType::Char => {out.write_i8(vec_len as i8)?; 1},
-                        ScalarType::UChar => {out.write_u8(vec_len as u8)?; 1},
-                        ScalarType::Short => {out.write_i16::<B>(vec_len as i16)?; 2},
-                        ScalarType::UShort => {out.write_u16::<B>(vec_len as u16)?; 2},
-                        ScalarType::Int => {out.write_i32::<B>(vec_len as i32)?; 4},
-                        ScalarType::UInt => {out.write_u32::<B>(vec_len as u32)?; 4},
-                        ScalarType::Float => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in PropertyType.")),
-                        ScalarType::Double => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in PropertyType.")),
-                    };
+                PropertyType::List(ref len_type, ref scalar_type) => {
+                    let write_len = |len, out: &mut T| {
+						let written = match *len_type {
+							ScalarType::Char => {out.write_i8(len as i8)?; 1},
+							ScalarType::UChar => {out.write_u8(len as u8)?; 1},
+							ScalarType::Short => {out.write_i16::<B>(len as i16)?; 2},
+							ScalarType::UShort => {out.write_u16::<B>(len as u16)?; 2},
+							ScalarType::Int => {out.write_i32::<B>(len as i32)?; 4},
+							ScalarType::UInt => {out.write_u32::<B>(len as u32)?; 4},
+							ScalarType::Float => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, float declared in PropertyType.")),
+							ScalarType::Double => return Err(io::Error::new(ErrorKind::InvalidInput, "Index of list must be an integer type, double declared in PropertyType.")),
+						};
+						Ok(written)
+					};
 
                     written += match *scalar_type {
-                        ScalarType::Char => self.write_binary_list::<T, i8, B>(get_prop!(element.get_list_char(k)), out, &|o, x| {o.write_i8(*x)?; Ok(1)} )?,
-                        ScalarType::UChar => self.write_binary_list::<T, u8, B>(get_prop!(element.get_list_uchar(k)), out, &|o, x| {o.write_u8(*x)?; Ok(1)} )?,
-                        ScalarType::Short => self.write_binary_list::<T, i16, B>(get_prop!(element.get_list_short(k)), out, &|o, x| {o.write_i16::<B>(*x)?; Ok(2)} )?,
-                        ScalarType::UShort => self.write_binary_list::<T, u16, B>(get_prop!(element.get_list_ushort(k)), out, &|o, x| {o.write_u16::<B>(*x)?; Ok(2)} )?,
-                        ScalarType::Int => self.write_binary_list::<T, i32, B>(get_prop!(element.get_list_int(k)), out, &|o, x| {o.write_i32::<B>(*x)?; Ok(4)} )?,
-                        ScalarType::UInt => self.write_binary_list::<T, u32, B>(get_prop!(element.get_list_uint(k)), out, &|o, x| {o.write_u32::<B>(*x)?; Ok(4)} )?,
-                        ScalarType::Float => self.write_binary_list::<T, f32, B>(get_prop!(element.get_list_float(k)), out, &|o, x| {o.write_f32::<B>(*x)?; Ok(4)} )?,
-                        ScalarType::Double => self.write_binary_list::<T, f64, B>(get_prop!(element.get_list_double(k)), out, &|o, x| {o.write_f64::<B>(*x)?; Ok(8)} )?,
+                        ScalarType::Char => {let list = get_prop!(element.get_list_char(k)); write_len(list.len(), out)?+self.write_binary_list::<T, i8, B>(list, out, &|o, x| {o.write_i8(*x)?; Ok(1)} )?},
+                        ScalarType::UChar => {let list = get_prop!(element.get_list_uchar(k)); write_len(list.len(), out)?+self.write_binary_list::<T, u8, B>(list, out, &|o, x| {o.write_u8(*x)?; Ok(1)} )?},
+                        ScalarType::Short => {let list = get_prop!(element.get_list_short(k)); write_len(list.len(), out)?+self.write_binary_list::<T, i16, B>(list, out, &|o, x| {o.write_i16::<B>(*x)?; Ok(2)} )?},
+                        ScalarType::UShort => {let list = get_prop!(element.get_list_ushort(k)); write_len(list.len(), out)?+self.write_binary_list::<T, u16, B>(list, out, &|o, x| {o.write_u16::<B>(*x)?; Ok(2)} )?},
+                        ScalarType::Int => {let list = get_prop!(element.get_list_int(k)); write_len(list.len(), out)?+self.write_binary_list::<T, i32, B>(list, out, &|o, x| {o.write_i32::<B>(*x)?; Ok(4)} )?},
+                        ScalarType::UInt => {let list = get_prop!(element.get_list_uint(k)); write_len(list.len(), out)?+self.write_binary_list::<T, u32, B>(list, out, &|o, x| {o.write_u32::<B>(*x)?; Ok(4)} )?},
+                        ScalarType::Float => {let list = get_prop!(element.get_list_float(k)); write_len(list.len(), out)?+self.write_binary_list::<T, f32, B>(list, out, &|o, x| {o.write_f32::<B>(*x)?; Ok(4)} )?},
+                        ScalarType::Double => {let list = get_prop!(element.get_list_double(k)); write_len(list.len(), out)?+self.write_binary_list::<T, f64, B>(list, out, &|o, x| {o.write_f64::<B>(*x)?; Ok(8)} )?},
                     }
                 }
             }
